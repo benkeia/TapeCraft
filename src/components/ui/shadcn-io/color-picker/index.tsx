@@ -394,4 +394,3 @@ export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProp
 
   return null
 }
-
