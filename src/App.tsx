@@ -1,7 +1,8 @@
 import { Suspense, useState, useEffect, useRef } from "react";
+import gsap from "gsap";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
-import { useControls } from "leva";
+import { OrbitControls, useGLTF, Html, useProgress } from "@react-three/drei";
+import { Leva, useControls } from "leva";
 import * as THREE from "three";
 
 interface CustomWindow extends Window {
@@ -47,6 +48,29 @@ interface SidebarProps {
   setCassetteColor: (color: string) => void;
   cassetteTexture: string | null;
   setCassetteTexture: (texture: string | null) => void;
+}
+
+function Loader() {
+  const { progress } = useProgress()
+  const barRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (barRef.current) {
+      gsap.to(barRef.current, {
+        width: `${progress}%`,
+        duration: 0.5,
+        ease: "power3.out",
+      })
+    }
+  }, [progress])
+
+  return (
+    <Html center>
+      <div style={{ width: '200px', height: '20px', border: '1px solid white', borderRadius: '5px', overflow: 'hidden' }}>
+        <div ref={barRef} style={{ width: '0%', height: '100%', backgroundColor: 'white' }}></div>
+      </div>
+    </Html>
+  )
 }
 
 const DynamicLighting = ({ lighting }: { lighting: LightingConfig }) => (
@@ -979,12 +1003,13 @@ const Sidebar = ({
 
 export default function App() {
   const [stickerColor, setStickerColor] = useState("#ffffff");
-  const [cassetteColor, setCassetteColor] = useState("#1a1a1a");
+  const [cassetteColor, setCassetteColor] = useState("#ffffff");
   const [cassetteTexture, setCassetteTexture] = useState<string | null>(null);
   const scale = 1;
 
   return (
     <div className="relative">
+      <Leva hidden />
       <Canvas
         shadows={false}
         camera={{ position: [0, 0, 2.5], fov: 50 }}
@@ -1002,7 +1027,7 @@ export default function App() {
         {/* Particules flottantes */}
         <FloatingParticles />
 
-        <Suspense fallback={null}>
+        <Suspense fallback={<Loader />}>
           <Cassette
             stickerColor={stickerColor}
             scale={scale}
