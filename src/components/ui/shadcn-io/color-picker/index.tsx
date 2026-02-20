@@ -29,6 +29,7 @@ interface ColorPickerContextValue {
   setMode: (mode: string) => void
 }
 
+
 const ColorPickerContext = createContext<ColorPickerContextValue | undefined>(undefined)
 
 export const useColorPicker = () => {
@@ -165,6 +166,7 @@ export type ColorPickerHueProps = HTMLAttributes<HTMLDivElement>
 export const ColorPickerHue = ({ className, ...props }: ColorPickerHueProps) => {
   const { hue, setHue } = useColorPicker()
 
+  const { dir, ...restProps } = props as any;
   return (
     <Root
       value={[hue]}
@@ -172,7 +174,7 @@ export const ColorPickerHue = ({ className, ...props }: ColorPickerHueProps) => 
       step={1}
       className={cn("relative flex h-4 w-full touch-none", className)}
       onValueChange={([hue]) => setHue(hue)}
-      {...props}
+      {...restProps}
     >
       <Track className="relative my-0.5 h-3 w-full grow rounded-full bg-[linear-gradient(90deg,#FF0000,#FFFF00,#00FF00,#00FFFF,#0000FF,#FF00FF,#FF0000)]">
         <Range className="absolute h-full" />
@@ -187,6 +189,7 @@ export type ColorPickerAlphaProps = HTMLAttributes<HTMLDivElement>
 export const ColorPickerAlpha = ({ className, ...props }: ColorPickerAlphaProps) => {
   const { alpha, setAlpha } = useColorPicker()
 
+  const { dir, ...restProps } = props as any;
   return (
     <Root
       value={[alpha]}
@@ -194,7 +197,7 @@ export const ColorPickerAlpha = ({ className, ...props }: ColorPickerAlphaProps)
       step={1}
       className={cn("relative flex h-4 w-full touch-none", className)}
       onValueChange={([alpha]) => setAlpha(alpha)}
-      {...props}
+      {...restProps}
     >
       <Track
         className="relative my-0.5 h-3 w-full grow rounded-full"

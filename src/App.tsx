@@ -4,6 +4,10 @@ import { OrbitControls, useGLTF } from "@react-three/drei";
 import { useControls } from "leva";
 import * as THREE from "three";
 
+interface CustomWindow extends Window {
+  cassetteScene?: THREE.Group;
+}
+
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -264,7 +268,7 @@ function Cassette({
   });
 
   interface CustomWindow extends Window {
-    cassetteScene?: THREE.Scene;
+    cassetteScene?: THREE.Group;
   }
 
   // ...
@@ -313,7 +317,7 @@ function Cassette({
           if (mesh.name === "Object_4") {
             if (isTransparent) {
               // Remplacer le matériau par un Material physique conservant la géométrie et la transformation du mesh
-              mesh.material = new (THREE as any).MeshPhysicalMaterial({
+              mesh.material = new THREE.MeshPhysicalMaterial({
                 ...materialProps,
                 transmission: 1,
                 transparent: true,
@@ -370,6 +374,7 @@ function Cassette({
     cassetteColor,
     isTransparent,
     materialProps,
+    scene,
   ]);
 
   scene.traverse((child) => {
@@ -525,15 +530,17 @@ const Sidebar = ({
           .material as THREE.MeshStandardMaterial;
 
         if (material.map && material.map.image) {
+          // Cast pour accéder à width/height
+          const img = material.map.image as HTMLImageElement;
+          const width = img.width || 512;
+          const height = img.height || 512;
+
           // Créer un renderer temporaire pour capturer la texture
           const canvas = document.createElement("canvas");
           const renderer = new THREE.WebGLRenderer({
             canvas,
             preserveDrawingBuffer: true,
           });
-
-          const width = material.map.image.width || 512;
-          const height = material.map.image.height || 512;
 
           canvas.width = width;
           canvas.height = height;
