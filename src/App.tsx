@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Html, useProgress } from "@react-three/drei";
 import { Leva, useControls } from "leva";
 import * as THREE from "three";
+import { colors, borderRadius, typography, lightingPresets } from "@/lib/design-tokens";
+import { useMobile } from "@/lib/responsive";
 
 interface CustomWindow extends Window {
   cassetteScene?: THREE.Group;
@@ -13,26 +15,21 @@ interface CustomWindow extends Window {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Upload } from "lucide-react";
+import { X, Menu, ChevronUp } from "lucide-react";
 
-interface LightConfig {
-  position: [number, number, number];
-  intensity: number;
-  color: string;
-}
-
-interface LightingConfig {
-  ambient: { intensity: number; color: string };
-  key: LightConfig;
-  fill: LightConfig;
-  rim: LightConfig;
-}
-
+// Type Definitions
 interface CassetteProps {
   stickerColor: string;
   scale: number;
   texture?: string | null;
   cassetteColor: string;
+  labelRotation: number;
+  labelOffsetX: number;
+  labelOffsetY: number;
+  labelScaleX: number;
+  labelScaleY: number;
+  labelMirrorX: boolean;
+  labelMirrorY: boolean;
 }
 
 interface CameraLightboxProps {
@@ -66,62 +63,93 @@ function Loader() {
 
   return (
     <Html center>
-      <div style={{ width: '200px', height: '20px', border: '1px solid white', borderRadius: '5px', overflow: 'hidden' }}>
-        <div ref={barRef} style={{ width: '0%', height: '100%', backgroundColor: 'white' }}></div>
+      <div className="flex flex-col items-center gap-4">
+        <div style={{ 
+          width: '240px', 
+          height: '3px', 
+          backgroundColor: colors.hairline,
+          borderRadius: borderRadius.full,
+          overflow: 'hidden',
+          boxShadow: `0 0 16px rgba(124, 58, 237, 0.1)`
+        }}>
+          <div 
+            ref={barRef} 
+            style={{ 
+              width: '0%', 
+              height: '100%', 
+              background: `linear-gradient(90deg, ${colors.primary}, ${colors.primaryDeep})`,
+              borderRadius: borderRadius.full,
+              transition: 'width 0.3s ease-out'
+            }}
+          />
+        </div>
+        <div style={{ 
+          fontSize: '13px', 
+          color: colors.slate,
+          fontWeight: 500,
+          fontFamily: typography.fontFamily.primary
+        }}>
+          Chargement... {Math.round(progress)}%
+        </div>
       </div>
     </Html>
   )
 }
 
-const DynamicLighting = ({ lighting }: { lighting: LightingConfig }) => (
-  <>
-    {/* Lumière ambiante douce, légèrement colorée */}
-    <ambientLight
-      intensity={lighting.ambient.intensity}
-      color={lighting.ambient.color}
-    />
+const DynamicLighting = ({ lighting }: { lighting: typeof lightingPresets.appleStudio }) => {
+  const keyPos = lighting.key.position as [number, number, number];
+  const fillPos = lighting.fill.position as [number, number, number];
+  const rimPos = lighting.rim.position as [number, number, number];
 
-    {/* Lumière principale (key light) plus forte, un peu chaude */}
-    <directionalLight
-      position={lighting.key.position}
-      intensity={lighting.key.intensity}
-      color={lighting.key.color}
-      castShadow={false}
-    />
+  return (
+    <>
+      {/* Ambient Light - Soft & Subtle */}
+      <ambientLight
+        intensity={lighting.ambient.intensity}
+        color={lighting.ambient.color}
+      />
 
-    {/* Lumière de remplissage plus faible et froide */}
-    <directionalLight
-      position={lighting.fill.position}
-      intensity={lighting.fill.intensity}
-      color={lighting.fill.color}
-      castShadow={false}
-    />
+      {/* Key Light - Main Fill */}
+      <directionalLight
+        position={keyPos}
+        intensity={lighting.key.intensity}
+        color={lighting.key.color}
+        castShadow={false}
+      />
 
-    {/* Lumière de contour (rim) pour relief */}
-    <directionalLight
-      position={lighting.rim.position}
-      intensity={lighting.rim.intensity}
-      color={lighting.rim.color}
-      castShadow={false}
-    />
+      {/* Fill Light - Shadow Detail */}
+      <directionalLight
+        position={fillPos}
+        intensity={lighting.fill.intensity}
+        color={lighting.fill.color}
+        castShadow={false}
+      />
 
-    {/* Spot light focalisée sur la cassette */}
-    <spotLight
-      position={[0, 5, 5]}
-      angle={Math.PI / 6}
-      penumbra={0.3}
-      intensity={1.2}
-      color="#fffaf0"
-      castShadow={false}
-      // target-position n'est pas une prop standard ; laissé pour compatibilité visuelle
-      target-position={[0, 0, 0]}
-      decay={2}
-      distance={10}
-    />
-  </>
-);
+      {/* Rim Light - Edge Definition */}
+      <directionalLight
+        position={rimPos}
+        intensity={lighting.rim.intensity}
+        color={lighting.rim.color}
+        castShadow={false}
+      />
 
-// Environnement 3D sphérique avec shader dégradé
+      {/* Spot Light - Accent */}
+      <spotLight
+        position={[0, 5, 5]}
+        angle={Math.PI / 6}
+        penumbra={0.3}
+        intensity={1}
+        color="#fffaf0"
+        castShadow={false}
+        target-position={[0, 0, 0]}
+        decay={2}
+        distance={10}
+      />
+    </>
+  );
+};
+
+// Environnement 3D sphérique avec shader dégradé - Design System Aligned
 const Environment3D = () => {
   const sphereRef = useRef<THREE.Mesh>(null);
 
@@ -142,7 +170,7 @@ const Environment3D = () => {
     varying vec3 vWorldPosition;
     varying vec2 vUv;
     
-    // Fonction de bruit simplex
+    // Simplex Noise Function
     vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
     vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
     vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -171,36 +199,34 @@ const Environment3D = () => {
     }
     
     void main() {
-      // Utiliser la position Y du monde pour le dégradé vertical
+      // Gradient based on world Y position
       float gradientFactor = (vWorldPosition.y + 25.0) / 50.0;
       gradientFactor = clamp(gradientFactor, 0.0, 1.0);
       
-      // Couleurs de l'image de référence
-      vec3 topColor = vec3(0.75, 0.76, 0.78);      // Gris clair du haut
-      vec3 middleColor = vec3(0.88, 0.90, 0.92);   // Blanc cassé du milieu
-      vec3 bottomColor = vec3(0.68, 0.78, 0.82);   // Bleu-vert du bas
+      // Design System Colors - Clean & Modern
+      vec3 topColor = vec3(0.973, 0.973, 0.976);    // Light gray
+      vec3 middleColor = vec3(0.988, 0.992, 0.992); // Almost white
+      vec3 bottomColor = vec3(0.953, 0.976, 0.984); // Subtle sky tint
       
-      // Dégradé principal basé sur la hauteur Y
+      // Main gradient
       vec3 baseGradient;
       if (gradientFactor > 0.6) {
-        // Partie haute : transition vers gris
         float t = (gradientFactor - 0.6) / 0.4;
         baseGradient = mix(middleColor, topColor, pow(t, 1.5));
       } else {
-        // Partie basse : transition vers bleu-vert
         float t = gradientFactor / 0.6;
         baseGradient = mix(bottomColor, middleColor, pow(t, 0.8));
       }
       
-      // Ajout de variations subtiles avec le bruit
-      vec2 noiseUV = vUv * 4.0 + uTime * 0.01;
-      float noise1 = snoise(noiseUV) * 0.004;
-      float noise2 = snoise(noiseUV * 2.5 - uTime * 0.008) * 0.003;
+      // Subtle noise variations
+      vec2 noiseUV = vUv * 4.0 + uTime * 0.005;
+      float noise1 = snoise(noiseUV) * 0.002;
+      float noise2 = snoise(noiseUV * 2.5 - uTime * 0.004) * 0.0015;
       
       vec3 finalColor = baseGradient + noise1 + noise2;
       
-      // Variation horizontale très subtile pour plus de réalisme
-      float horizontalVar = sin(vWorldPosition.x * 0.1) * cos(vWorldPosition.z * 0.1) * 0.01;
+      // Horizontal variation
+      float horizontalVar = sin(vWorldPosition.x * 0.1) * cos(vWorldPosition.z * 0.1) * 0.005;
       finalColor += horizontalVar;
       
       gl_FragColor = vec4(finalColor, 1.0);
@@ -229,10 +255,10 @@ const Environment3D = () => {
   );
 };
 
-// Particules flottantes pour l'ambiance
+// Floating Particles - Subtle Atmosphere
 const FloatingParticles = () => {
   const particlesRef = useRef<THREE.Points>(null);
-  const particleCount = 50;
+  const particleCount = 30;
 
   const positions = new Float32Array(particleCount * 3);
   const scales = new Float32Array(particleCount);
@@ -241,14 +267,14 @@ const FloatingParticles = () => {
     positions[i * 3] = (Math.random() - 0.5) * 10;
     positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
     positions[i * 3 + 2] = (Math.random() - 0.5) * 5;
-    scales[i] = Math.random() * 0.5 + 0.1;
+    scales[i] = Math.random() * 0.3 + 0.05;
   }
 
   useFrame((state) => {
     if (particlesRef.current) {
-      particlesRef.current.rotation.y = state.clock.elapsedTime * 0.02;
+      particlesRef.current.rotation.y = state.clock.elapsedTime * 0.01;
       particlesRef.current.rotation.x =
-        Math.sin(state.clock.elapsedTime * 0.01) * 0.1;
+        Math.sin(state.clock.elapsedTime * 0.005) * 0.05;
     }
   });
 
@@ -258,10 +284,10 @@ const FloatingParticles = () => {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.02}
-        color="#ffffff"
+        size={0.015}
+        color={colors.primary}
         transparent
-        opacity={0.3}
+        opacity={0.15}
         sizeAttenuation
         blending={THREE.AdditiveBlending}
       />
@@ -276,10 +302,27 @@ function Cassette({
   scale,
   texture,
   cassetteColor,
+  labelRotation,
+  labelOffsetX,
+  labelOffsetY,
+  labelScaleX,
+  labelScaleY,
+  labelMirrorX,
+  labelMirrorY,
 }: CassetteProps) {
   const { scene, nodes } = useGLTF("/models/cassette.glb");
   const [textureMap, setTextureMap] = useState<THREE.Texture | null>(null);
+  const [textureAspect, setTextureAspect] = useState(1);
+  const [stickerUvBounds, setStickerUvBounds] = useState<{
+    minU: number;
+    maxU: number;
+    minV: number;
+    maxV: number;
+  } | null>(null);
   const [isTransparent, setIsTransparent] = useState(false);
+  const originalImageRef = useRef<HTMLImageElement | null>(null);
+
+
 
   // Contrôles Leva pour le matériau de transmission
   const materialProps = useControls("Transmission Material", {
@@ -302,6 +345,40 @@ function Cassette({
     (window as CustomWindow).cassetteScene = scene;
   }, [scene]);
 
+  useEffect(() => {
+    const stickerMesh = scene.getObjectByName("Sticker") as THREE.Mesh | null;
+
+    if (!stickerMesh?.isMesh) {
+      setStickerUvBounds(null);
+      return;
+    }
+
+    const geometry = stickerMesh.geometry as THREE.BufferGeometry;
+    const uvAttribute = geometry.attributes.uv as THREE.BufferAttribute | undefined;
+
+    if (!uvAttribute) {
+      setStickerUvBounds(null);
+      return;
+    }
+
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+
+    for (let index = 0; index < uvAttribute.count; index += 1) {
+      const u = uvAttribute.getX(index);
+      const v = uvAttribute.getY(index);
+
+      minU = Math.min(minU, u);
+      maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v);
+      maxV = Math.max(maxV, v);
+    }
+
+    setStickerUvBounds({ minU, maxU, minV, maxV });
+  }, [scene]);
+
   // Charger la texture si fournie
   useEffect(() => {
     if (texture) {
@@ -309,9 +386,15 @@ function Cassette({
       loader.load(
         texture,
         (loadedTexture) => {
-          loadedTexture.wrapS = THREE.RepeatWrapping;
-          loadedTexture.wrapT = THREE.RepeatWrapping;
+          // Empêche l'effet de "prolongement" hors UV (tiling involontaire)
+          loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
+          loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
           loadedTexture.flipY = false;
+          loadedTexture.needsUpdate = true;
+          const image = loadedTexture.image as { width?: number; height?: number } | undefined;
+          if (image?.width && image?.height) {
+            setTextureAspect(image.width / image.height);
+          }
           setTextureMap(loadedTexture);
         },
         undefined,
@@ -331,16 +414,110 @@ function Cassette({
   }, [cassetteColor]);
 
   useEffect(() => {
+    if (!textureMap || !stickerUvBounds) {
+      return;
+    }
+
+    const uvWidth = Math.max(stickerUvBounds.maxU - stickerUvBounds.minU, 0.0001);
+    const uvHeight = Math.max(stickerUvBounds.maxV - stickerUvBounds.minV, 0.0001);
+    const targetAspect = uvWidth / uvHeight;
+    const rotationRadians = THREE.MathUtils.degToRad(labelRotation);
+    const mirrorScaleX = labelMirrorX ? -1 : 1;
+    const mirrorScaleY = labelMirrorY ? -1 : 1;
+
+    let fitRepeatX = 1;
+    let fitRepeatY = 1;
+    let fitOffsetX = 0;
+    let fitOffsetY = 0;
+
+    if (textureAspect > targetAspect) {
+      fitRepeatY = targetAspect / textureAspect;
+      fitOffsetY = (1 - fitRepeatY) / 2;
+    } else {
+      fitRepeatX = textureAspect / targetAspect;
+      fitOffsetX = (1 - fitRepeatX) / 2;
+    }
+
+    const normalizeMatrix = new THREE.Matrix3().setUvTransform(
+      -stickerUvBounds.minU,
+      -stickerUvBounds.minV,
+      1 / uvWidth,
+      1 / uvHeight,
+      0,
+      0,
+      0,
+    );
+
+    const userMatrix = new THREE.Matrix3().setUvTransform(
+      labelOffsetX,
+      labelOffsetY,
+      labelScaleX * mirrorScaleX,
+      labelScaleY * mirrorScaleY,
+      rotationRadians,
+      0.5,
+      0.5,
+    );
+
+    const fitMatrix = new THREE.Matrix3().setUvTransform(
+      fitOffsetX,
+      fitOffsetY,
+      fitRepeatX,
+      fitRepeatY,
+      0,
+      0,
+      0,
+    );
+
+    textureMap.wrapS = THREE.ClampToEdgeWrapping;
+    textureMap.wrapT = THREE.ClampToEdgeWrapping;
+    textureMap.matrixAutoUpdate = false;
+    textureMap.matrix.copy(userMatrix).multiply(fitMatrix).multiply(normalizeMatrix);
+    textureMap.needsUpdate = true;
+  }, [
+    textureMap,
+    stickerUvBounds,
+    textureAspect,
+    labelRotation,
+    labelOffsetX,
+    labelOffsetY,
+    labelScaleX,
+    labelScaleY,
+    labelMirrorX,
+    labelMirrorY,
+  ]);
+
+  useEffect(() => {
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const material = mesh.material as THREE.MeshStandardMaterial;
-        // Cloner le matériau pour éviter les conflits
+        
         if (material) {
-          // Pour le mesh Object_4, appliquer le matériau de transmission si transparent, sinon couleur normale
-          if (mesh.name === "Object_4") {
+          // Object_2 (id 54): Plastique transparent, jamais affecté par la coloration
+          if (mesh.name === "Object_2") {
+            mesh.material = new THREE.MeshPhysicalMaterial({
+              ...materialProps,
+              transmission: 0.9,
+              transparent: true,
+              opacity: 0.15,
+              roughness: 0.05,
+              thickness: 0.3,
+              ior: 1.5,
+              color: new THREE.Color("#ffffff"),
+              side: THREE.DoubleSide,
+            });
+          }
+          // Object_3: Toujours #120e0c, jamais changé
+          else if (mesh.name === "Object_3") {
+            mesh.material = material.clone();
+            const newMaterial = mesh.material as THREE.MeshStandardMaterial;
+            newMaterial.color = new THREE.Color("#120e0c");
+            newMaterial.map = null;
+            newMaterial.needsUpdate = true;
+          }
+          // Object_4: Seul shell coloré avec la couleur sélectionnée
+          else if (mesh.name === "Object_4") {
             if (isTransparent) {
-              // Remplacer le matériau par un Material physique conservant la géométrie et la transformation du mesh
               mesh.material = new THREE.MeshPhysicalMaterial({
                 ...materialProps,
                 transmission: 1,
@@ -353,41 +530,92 @@ function Cassette({
                 side: THREE.DoubleSide,
               });
             } else {
+              // Garder le matériau original avec sa texture
               mesh.material = material.clone();
               const newMaterial = mesh.material as THREE.MeshStandardMaterial;
-              newMaterial.color =
-                cassetteColor === "transparent"
-                  ? new THREE.Color("#ffffff")
-                  : new THREE.Color(cassetteColor);
+              
+              const colorValue = cassetteColor === "transparent" ? "#ffffff" : cassetteColor;
+              newMaterial.roughness = 0.15;
+              newMaterial.metalness = 0.2;
+              
+              // Si une texture map est présente, créer une texture modifiée avec le masque noir
+              if (newMaterial.map && newMaterial.map.image) {
+                // On sauvegarde l'image d'origine au premier passage
+                if (!originalImageRef.current) {
+                  originalImageRef.current = newMaterial.map.image as HTMLImageElement;
+                }
+                
+                // On utilise toujours notre sauvegarde comme source de vérité
+                const sourceImage = originalImageRef.current;
+                
+                const canvas = document.createElement("canvas");
+                canvas.width = sourceImage.width;
+                canvas.height = sourceImage.height;
+                
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                  // Dessiner l'image originale
+                  ctx.drawImage(sourceImage, 0, 0);
+                  
+                  // Récupérer les données de pixels
+                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const data = imageData.data;
+                  
+                  // Convertir la couleur choisie en RGB
+                  const tempColor = new THREE.Color(colorValue);
+                  const r = Math.round(tempColor.r * 255);
+                  const g = Math.round(tempColor.g * 255);
+                  const b = Math.round(tempColor.b * 255);
+                  
+                  // Boucler sur les pixels et remplacer les noirs
+                  for (let i = 0; i < data.length; i += 4) {
+                    const pixelR = data[i];
+                    const pixelG = data[i + 1];
+                    const pixelB = data[i + 2];
+                    
+                    // Déterminer si le pixel est noir (tous les canaux < 50)
+                    if (pixelR < 50 && pixelG < 50 && pixelB < 50) {
+                      data[i] = r;      // R
+                      data[i + 1] = g;  // G
+                      data[i + 2] = b;  // B
+                      // data[i + 3] reste inchangé (alpha)
+                    }
+                  }
+                  
+                  // Écrire les données modifiées
+                  ctx.putImageData(imageData, 0, 0);
+                  
+                  // Créer une nouvelle texture à partir du canvas
+                  const newTexture = new THREE.CanvasTexture(canvas);
+                  newTexture.wrapS = THREE.ClampToEdgeWrapping;
+                  newTexture.wrapT = THREE.ClampToEdgeWrapping;
+                  newTexture.flipY = false;
+                  
+                  newMaterial.map = newTexture;
+                }
+              }
+              
               newMaterial.needsUpdate = true;
             }
           }
-          // Appliquer la texture à l'étiquette spécifiquement au mesh "Sticker"
+          // Sticker: Appliquer la texture ou stickerColor
           else if (mesh.name === "Sticker") {
             mesh.material = material.clone();
             const newMaterial = mesh.material as THREE.MeshStandardMaterial;
             if (textureMap) {
               newMaterial.map = textureMap;
               newMaterial.color = new THREE.Color("#ffffff");
+              newMaterial.onBeforeCompile = () => {};
             } else {
               newMaterial.map = null;
               newMaterial.color = new THREE.Color(stickerColor);
+              newMaterial.onBeforeCompile = () => {};
             }
-            newMaterial.side = THREE.DoubleSide;
+            newMaterial.side = THREE.FrontSide;
             newMaterial.needsUpdate = true;
           }
-          // Pour les autres meshes, appliquer la couleur normalement
-          else {
-            if (!isTransparent) {
-              mesh.material = material.clone();
-              const newMaterial = mesh.material as THREE.MeshStandardMaterial;
-              newMaterial.color =
-                cassetteColor === "transparent"
-                  ? new THREE.Color("#ffffff")
-                  : new THREE.Color(cassetteColor);
-              newMaterial.needsUpdate = true;
-            }
-          }
+          // Autres meshes: Ne pas les colorer, garder leur apparence d'origine
+          // (Pas de modification)
         }
       }
     });
@@ -423,28 +651,27 @@ function Cassette({
   );
 }
 
-// Lightbox qui suit la caméra (éclairage doux et homogène)
+// Camera Lightbox - Clean & Production Ready
 function CameraLightbox({
-  intensity = 0.5,
+  intensity = 0.4,
   color = "#ffffff",
   distance = 2.5,
 }: CameraLightboxProps) {
   const { camera } = useThree();
   const groupRef = useRef<THREE.Group>(null);
 
-  // Positions relatives autour de la caméra (haut, bas, gauche, droite, avant)
-  const offsets: [number, number, number][] = [
-    [0, 0.5, 0], // haut
-    [0, -0.5, 0], // bas
-    [-0.5, 0, 0], // gauche
-    [0.5, 0, 0], // droite
-    [0, 0, 0.5], // devant
-    [0, 0, -0.5], // derrière (léger)
+  // Relative positions around camera
+  const offsets: Array<[number, number, number]> = [
+    [0, 0.5, 0],    // top
+    [0, -0.5, 0],   // bottom
+    [-0.5, 0, 0],   // left
+    [0.5, 0, 0],    // right
+    [0, 0, 0.5],    // front
+    [0, 0, -0.5],   // back
   ];
 
   useFrame(() => {
     if (groupRef.current && camera) {
-      // Place le groupe à la position de la caméra
       groupRef.current.position.copy(camera.position);
       groupRef.current.quaternion.copy(camera.quaternion);
     }
@@ -452,44 +679,392 @@ function CameraLightbox({
 
   return (
     <group ref={groupRef}>
-      {offsets.map((offset, i) => (
-        <pointLight
-          key={i}
-          position={offset.map((v) => v * distance) as [number, number, number]}
-          intensity={intensity}
-          color={color}
-          distance={distance * 2.5}
-          decay={2}
-        />
-      ))}
+      {offsets.map((offset, i) => {
+        const pos: [number, number, number] = [
+          offset[0] * distance,
+          offset[1] * distance,
+          offset[2] * distance,
+        ];
+        return (
+          <pointLight
+            key={i}
+            position={pos}
+            intensity={intensity}
+            color={color}
+            distance={distance * 2.5}
+            decay={2}
+          />
+        );
+      })}
     </group>
   );
 }
 
-// Préréglage d'éclairage sophistiqué style Apple
-const appleLighting: LightingConfig = {
-  ambient: {
-    intensity: 0.5,
-    color: "#f0f0f2",
-  },
-  key: {
-    position: [5, 8, 5],
-    intensity: 0.85,
-    color: "#fffbe8", // Légèrement chaud
-  },
-  fill: {
-    position: [-3, 4, -2],
-    intensity: 0.55,
-    color: "#e8f4f8", // Froid
-  },
-  rim: {
-    position: [0, 2, -6],
-    intensity: 0.5,
-    color: "#b8e0ff", // Bleuté
-  },
+// Apple Studio Lighting Preset
+const appleLighting = lightingPresets.appleStudio;
+
+// Sidebar Content Component (used by both desktop and mobile)
+const SidebarContent = ({
+  stickerColor,
+  setStickerColor,
+  cassetteColor,
+  setCassetteColor,
+  cassetteTexture,
+  textureInputRef,
+  calculatePrice,
+  handleTextureUpload,
+  removeTexture,
+  extractStickerTexture,
+  downloadBaseTexture,
+  isMobile,
+}: SidebarProps & {
+  textureInputRef: React.RefObject<HTMLInputElement>;
+  calculatePrice: () => number;
+  handleTextureUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  removeTexture: () => void;
+  extractStickerTexture: () => void;
+  downloadBaseTexture: () => Promise<void>;
+  isMobile?: boolean;
+}) => {
+  const colorPresets = [
+    { color: colors.inkDeep, label: "Black" },
+    { color: colors.canvas, label: "White" },
+    { color: colors.brandPink, label: "Pink" },
+    { color: colors.brandOrange, label: "Orange" },
+    { color: colors.brandGreen, label: "Green" },
+    { color: colors.brandTeal, label: "Teal" },
+    { color: colors.primary, label: "Purple" },
+    { color: colors.charcoal, label: "Charcoal" },
+    { color: colors.cardTintYellowBold, label: "Yellow" },
+    { color: colors.brandBrown, label: "Brown" },
+    { color: "#e8e8e8", label: "Gray" },
+    { color: "transparent", label: "Clear" },
+  ];
+
+  return (
+    <div className={isMobile ? "space-y-6" : "space-y-8"}>
+      {/* Cassette Color Section */}
+      <section className="space-y-4">
+        <div style={{
+          fontSize: typography.sizes.bodySmMedium.fontSize,
+          fontWeight: 600,
+          color: colors.ink,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}>
+          Cassette Shell
+        </div>
+
+        <div className={isMobile ? "grid grid-cols-5 gap-2" : "grid grid-cols-6 gap-2"}>
+          {colorPresets.map((preset) => (
+            <button
+              key={preset.color}
+              onClick={() => setCassetteColor(preset.color)}
+              className="transition-all duration-200 hover:scale-110 relative"
+              style={{
+                width: isMobile ? "36px" : "40px",
+                height: isMobile ? "36px" : "40px",
+                borderRadius: borderRadius.md,
+                backgroundColor: preset.color === "transparent" ? colors.cardTintSky : preset.color,
+                border: `2px solid ${cassetteColor === preset.color ? colors.primary : colors.hairline}`,
+                boxShadow: cassetteColor === preset.color ? `0 0 0 2px ${colors.canvas}, 0 0 8px ${colors.primary}40` : "none",
+                cursor: "pointer",
+              }}
+              title={preset.label}
+            >
+              {preset.color === "transparent" && (
+                <span style={{
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  color: colors.primary,
+                }}>
+                  T
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Color Input */}
+        <div className="space-y-2">
+          <div style={{ display: "flex", gap: "8px" }}>
+            <div 
+              style={{
+                width: isMobile ? "40px" : "48px",
+                height: isMobile ? "40px" : "48px",
+                borderRadius: borderRadius.md,
+                backgroundColor: cassetteColor === "transparent" ? colors.cardTintSky : cassetteColor,
+                border: `1px solid ${colors.hairline}`,
+                flexShrink: 0,
+              }}
+            />
+            <Input
+              type="text"
+              value={cassetteColor}
+              onChange={(e) => setCassetteColor(e.target.value)}
+              className="flex-1"
+              placeholder="#HEX"
+              style={{
+                fontSize: "12px",
+                fontFamily: "monospace",
+                padding: "8px 12px",
+                borderRadius: borderRadius.md,
+                border: `1px solid ${colors.hairline}`,
+                color: colors.ink,
+              }}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Label Section */}
+      <section className="space-y-4">
+        <div style={{
+          fontSize: typography.sizes.bodySmMedium.fontSize,
+          fontWeight: 600,
+          color: colors.ink,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}>
+          Label Design
+        </div>
+
+        {!cassetteTexture ? (
+          <div className="space-y-3">
+            {/* Color Picker for Label */}
+            <div>
+              <Label 
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: colors.slate,
+                  textTransform: "uppercase",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Label Color
+              </Label>
+              <div className={isMobile ? "grid grid-cols-6 gap-1" : "grid grid-cols-8 gap-1.5"}>
+                {colorPresets.slice(0, 8).map((preset) => (
+                  <button
+                    key={preset.color}
+                    onClick={() => setStickerColor(preset.color)}
+                    className="transition-all"
+                    style={{
+                      width: isMobile ? "24px" : "28px",
+                      height: isMobile ? "24px" : "28px",
+                      borderRadius: borderRadius.sm,
+                      backgroundColor: preset.color === "transparent" ? colors.cardTintSky : preset.color,
+                      border: stickerColor === preset.color ? `2px solid ${colors.primary}` : `1px solid ${colors.hairline}`,
+                      cursor: "pointer",
+                      boxShadow: stickerColor === preset.color ? `0 0 0 1px ${colors.canvas}, 0 0 6px ${colors.primary}40` : "none",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Upload Button */}
+            <Button
+              variant="outline"
+              onClick={() => textureInputRef.current?.click()}
+              className="w-full"
+              style={{
+                borderStyle: "dashed",
+                borderWidth: "2px",
+                borderColor: colors.hairlineStrong,
+                backgroundColor: colors.surface,
+                color: colors.charcoal,
+                padding: isMobile ? "16px" : "20px",
+                borderRadius: borderRadius.md,
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              <div className="text-center">
+                <div style={{ fontSize: "18px", marginBottom: "4px" }}>↑</div>
+                <p>Upload Label</p>
+              </div>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Texture Preview */}
+            <div 
+              style={{
+                position: "relative",
+                height: isMobile ? "60px" : "80px",
+                borderRadius: borderRadius.lg,
+                border: `1px solid ${colors.hairline}`,
+                overflow: "hidden",
+                backgroundColor: colors.surface,
+              }}
+            >
+              <img
+                src={cassetteTexture}
+                alt="Label"
+                className="w-full h-full object-contain"
+                style={{ aspectRatio: "3.5 / 1.6562" }}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => textureInputRef.current?.click()}
+                style={{
+                  flex: 1,
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderColor: colors.hairline,
+                  color: colors.ink,
+                }}
+              >
+                Change
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={removeTexture}
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderColor: colors.semanticError,
+                  color: colors.semanticError,
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Utility Buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={extractStickerTexture}
+            style={{
+              flex: 1,
+              fontSize: "11px",
+              fontWeight: 600,
+              borderColor: colors.hairline,
+              color: colors.slate,
+              borderWidth: "1px",
+              borderRadius: borderRadius.md,
+            }}
+          >
+            Export
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={downloadBaseTexture}
+            style={{
+              flex: 1,
+              fontSize: "11px",
+              fontWeight: 600,
+              borderColor: colors.hairline,
+              color: colors.slate,
+              borderWidth: "1px",
+              borderRadius: borderRadius.md,
+            }}
+          >
+            Template
+          </Button>
+        </div>
+
+        <input 
+          ref={textureInputRef} 
+          type="file" 
+          accept="image/*" 
+          onChange={handleTextureUpload} 
+          className="hidden" 
+        />
+      </section>
+
+      {/* Pricing Section */}
+      <div 
+        style={{
+          backgroundColor: colors.surface,
+          padding: "16px",
+          borderRadius: borderRadius.lg,
+          border: `1px solid ${colors.hairline}`,
+        }}
+      >
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "8px",
+        }}>
+          <span style={{
+            fontSize: typography.sizes.bodySmMedium.fontSize,
+            fontWeight: 600,
+            color: colors.slate,
+            textTransform: "uppercase",
+          }}>
+            Total
+          </span>
+          <span style={{
+            fontSize: "20px",
+            fontWeight: 700,
+            color: colors.primary,
+            fontFamily: "monospace",
+          }}>
+            {calculatePrice().toFixed(2)}€
+          </span>
+        </div>
+        <div style={{
+          fontSize: "11px",
+          color: colors.slate,
+          lineHeight: 1.4,
+        }}>
+          Base: 12.90€ {cassetteTexture && "+ Label: 3.00€"}
+        </div>
+      </div>
+
+      {/* Add to Cart Button */}
+      <Button 
+        className="w-full"
+        style={{
+          backgroundColor: colors.primary,
+          color: colors.onDark,
+          height: isMobile ? "40px" : "44px",
+          fontSize: typography.sizes.buttonMd.fontSize,
+          fontWeight: 700,
+          borderRadius: borderRadius.md,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+          border: "none",
+          cursor: "pointer",
+          transition: "all 0.2s",
+          boxShadow: `0 0 0 1px ${colors.primary}20`,
+        }}
+      >
+        + Add to Cart
+      </Button>
+
+      {/* Shipping Info */}
+      <p style={{
+        fontSize: "11px",
+        textAlign: "center",
+        color: colors.slate,
+        fontFamily: "monospace",
+      }}>
+        Ships in 3–5 days
+      </p>
+    </div>
+  );
 };
 
-// Composant Sidebar
+// Modern Production-Ready Desktop Sidebar
 const Sidebar = ({
   stickerColor,
   setStickerColor,
@@ -498,32 +1073,22 @@ const Sidebar = ({
   cassetteTexture,
   setCassetteTexture,
 }: SidebarProps) => {
-  const [stickerMode, setStickerMode] = useState<"text" | "upload">("text");
-  const [albumTitle, setAlbumTitle] = useState("");
-  const [artistName, setArtistName] = useState("");
-  const [faceA, setFaceA] = useState("");
-  const [faceB, setFaceB] = useState("");
   const textureInputRef = useRef<HTMLInputElement>(null);
 
-  const calculatePrice = () => {
-    const basePrice = 12.9;
-    const stickerPrice = cassetteTexture || albumTitle ? 3.0 : 0;
-    return basePrice + stickerPrice;
-  };
+  const calculatePrice = () => 12.9 + (cassetteTexture ? 3.0 : 0);
 
   const handleTextureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setCassetteTexture(result);
-      };
-      reader.onerror = () => {
-        console.error("Erreur lors de la lecture du fichier");
-      };
-      reader.readAsDataURL(file);
+    if (!file || !file.type.startsWith("image/")) {
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setCassetteTexture(result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const removeTexture = () => {
@@ -533,15 +1098,13 @@ const Sidebar = ({
     }
   };
 
-  // Fonction pour extraire la texture de l'étiquette depuis le modèle 3D
   const extractStickerTexture = () => {
     try {
       const scene = (window as CustomWindow).cassetteScene;
       if (!scene) {
-        throw new Error("Scène 3D non disponible");
+        throw new Error("3D scene not available");
       }
 
-      // Rechercher le mesh de l'étiquette
       let stickerMesh: THREE.Mesh | null = null;
       scene.traverse((child: THREE.Object3D) => {
         if (child.name === "Sticker" && (child as THREE.Mesh).isMesh) {
@@ -549,482 +1112,538 @@ const Sidebar = ({
         }
       });
 
-      if (stickerMesh && (stickerMesh as THREE.Mesh).material) {
-        const material = (stickerMesh as THREE.Mesh)
-          .material as THREE.MeshStandardMaterial;
-
-        if (material.map && material.map.image) {
-          // Cast pour accéder à width/height
-          const img = material.map.image as HTMLImageElement;
-          const width = img.width || 512;
-          const height = img.height || 512;
-
-          // Créer un renderer temporaire pour capturer la texture
-          const canvas = document.createElement("canvas");
-          const renderer = new THREE.WebGLRenderer({
-            canvas,
-            preserveDrawingBuffer: true,
-          });
-
-          canvas.width = width;
-          canvas.height = height;
-          renderer.setSize(width, height);
-
-          // Créer une scène simple avec un quad pour afficher la texture
-          const tempScene = new THREE.Scene();
-          const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-          const geometry = new THREE.PlaneGeometry(2, 2);
-          const tempMaterial = new THREE.MeshBasicMaterial({
-            map: material.map,
-          });
-          const quad = new THREE.Mesh(geometry, tempMaterial);
-          tempScene.add(quad);
-
-          renderer.render(tempScene, camera);
-
-          // Extraire l'image du canvas
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = "sticker-texture-original.png";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            }
-
-            // Nettoyer
-            renderer.dispose();
-            geometry.dispose();
-            tempMaterial.dispose();
-          }, "image/png");
-        } else {
-          throw new Error("Aucune texture trouvée sur l'étiquette");
-        }
-      } else {
-        throw new Error("Mesh de l'étiquette non trouvé");
+      if (!stickerMesh || !(stickerMesh as THREE.Mesh).material) {
+        throw new Error("Sticker mesh not found");
       }
+
+      const material = (stickerMesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if (!material.map || !material.map.image) {
+        throw new Error("No texture found on sticker");
+      }
+
+      const img = material.map.image as HTMLImageElement;
+      const width = img.width || 512;
+      const height = img.height || 512;
+      const canvas = document.createElement("canvas");
+      const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+
+      canvas.width = width;
+      canvas.height = height;
+      renderer.setSize(width, height);
+
+      const tempScene = new THREE.Scene();
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const geometry = new THREE.PlaneGeometry(2, 2);
+      const tempMaterial = new THREE.MeshBasicMaterial({ map: material.map });
+      tempScene.add(new THREE.Mesh(geometry, tempMaterial));
+
+      renderer.render(tempScene, camera);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "sticker-texture.png";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+
+        renderer.dispose();
+        geometry.dispose();
+        tempMaterial.dispose();
+      }, "image/png");
     } catch (error) {
-      console.error("Erreur lors de l'extraction de la texture :", error);
-      // Fallback : générer le gabarit si l'extraction échoue
+      console.error("Error extracting texture:", error);
       downloadBaseTexture();
     }
   };
 
-  // Fonction pour télécharger la texture de base (gabarit)
   const downloadBaseTexture = async () => {
     try {
-      // Créer un canvas pour générer une texture d'étiquette réaliste
       const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 256; // Format plus approprié pour une étiquette de cassette
+      canvas.width = 3500;
+      canvas.height = 1656;
       const ctx = canvas.getContext("2d");
+      const scaleX = canvas.width / 512;
+      const scaleY = canvas.height / 256;
+      const sx = (value: number) => value * scaleX;
+      const sy = (value: number) => value * scaleY;
 
-      if (ctx) {
-        // Fond blanc pour l'étiquette
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 512, 256);
-
-        // Bordure de l'étiquette
-        ctx.strokeStyle = "#e0e0e0";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(5, 5, 502, 246);
-
-        // Zone principale du titre (rectangle arrondi)
-        ctx.fillStyle = "#f8f8f8";
-        ctx.beginPath();
-        // roundRect peut ne pas être disponible dans tous les contextes ; ici utilisé pour le gabarit
-
-        ctx.roundRect(30, 40, 452, 60, 8);
-        ctx.fill();
-        ctx.strokeStyle = "#d0d0d0";
-        ctx.stroke();
-
-        // Texte principal
-        ctx.fillStyle = "#333333";
-        ctx.font = "bold 24px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("TITRE DE L'ALBUM", 256, 75);
-
-        // Zone artiste
-        ctx.fillStyle = "#f0f0f0";
-        ctx.beginPath();
-
-        ctx.roundRect(30, 120, 452, 40, 6);
-        ctx.fill();
-        ctx.strokeStyle = "#d0d0d0";
-        ctx.stroke();
-
-        ctx.fillStyle = "#666666";
-        ctx.font = "18px Arial";
-        ctx.fillText("Nom de l'Artiste", 256, 145);
-
-        // Petites lignes pour la tracklist
-        ctx.strokeStyle = "#e0e0e0";
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 6; i++) {
-          const y = 180 + i * 10;
-          ctx.beginPath();
-          ctx.moveTo(50, y);
-          ctx.lineTo(200, y);
-          ctx.stroke();
-
-          ctx.moveTo(320, y);
-          ctx.lineTo(470, y);
-          ctx.stroke();
-        }
-
-        // Marquages Face A / Face B
-        ctx.fillStyle = "#999999";
-        ctx.font = "bold 12px Arial";
-        ctx.textAlign = "left";
-        ctx.fillText("FACE A", 50, 175);
-        ctx.fillText("FACE B", 320, 175);
-
-        // Logos/symboles décoratifs
-        ctx.fillStyle = "#cccccc";
-        ctx.beginPath();
-        ctx.arc(460, 30, 15, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#999999";
-        ctx.font = "12px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("♪", 460, 35);
-
-        // Convertir en blob et télécharger
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "sticker-cassette-template.png";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }
-        }, "image/png");
+      if (!ctx) {
+        return;
       }
+
+      ctx.fillStyle = colors.canvas;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = colors.hairline;
+      ctx.lineWidth = Math.max(2, Math.round(scaleX));
+      ctx.strokeRect(sx(5), sy(5), sx(502), sy(246));
+
+      ctx.fillStyle = colors.surface;
+      ctx.beginPath();
+      ctx.roundRect(sx(30), sy(40), sx(452), sy(60), Math.max(8, sx(8)));
+      ctx.fill();
+
+      ctx.fillStyle = colors.charcoal;
+      ctx.font = `bold ${Math.max(24, Math.round(24 * scaleY))}px ${typography.fontFamily.primary}`;
+      ctx.textAlign = "center";
+      ctx.fillText("ALBUM TITLE", sx(256), sy(75));
+
+      ctx.fillStyle = colors.surface;
+      ctx.beginPath();
+      ctx.roundRect(sx(30), sy(120), sx(452), sy(40), Math.max(6, sx(6)));
+      ctx.fill();
+
+      ctx.fillStyle = colors.slate;
+      ctx.font = `${Math.max(18, Math.round(18 * scaleY))}px ${typography.fontFamily.primary}`;
+      ctx.fillText("Artist Name", sx(256), sy(145));
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cassette-template.png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, "image/png");
     } catch (error) {
-      console.error("Erreur lors de la génération de la texture :", error);
+      console.error("Error generating template:", error);
     }
   };
 
   return (
-    <div className="fixed right-0 top-0 w-80 h-full bg-background border-l-2 border-foreground p-0 overflow-y-auto z-10">
-      {/* Header avec thème noir/blanc */}
-      <div className="bg-foreground text-background p-4 border-b-2 border-foreground">
-        <h1 className="text-lg font-black uppercase tracking-wider">
-          TAPE//CRAFT
+    <div 
+      className="hidden lg:fixed lg:flex right-0 top-0 h-full bg-white border-l flex-col z-10"
+      style={{
+        width: "320px",
+        borderLeftColor: colors.hairline,
+        borderLeftWidth: "1px",
+        fontFamily: typography.fontFamily.primary,
+      }}
+    >
+      {/* Header */}
+      <div 
+        className="sticky top-0 p-6 border-b"
+        style={{
+          backgroundColor: colors.primary,
+          borderBottomColor: colors.hairline,
+          borderBottomWidth: "1px",
+          zIndex: 20,
+        }}
+      >
+        <h1 
+          style={{
+            fontSize: typography.sizes.heading3.fontSize,
+            fontWeight: 600,
+            color: colors.onDark,
+            letterSpacing: "0.5px",
+            margin: 0,
+          }}
+        >
+          TAPE CRAFT
         </h1>
-        <p className="text-xs font-mono opacity-80">Custom cassette studio</p>
+        <p 
+          style={{
+            fontSize: "12px",
+            color: colors.onDarkMuted,
+            fontWeight: 500,
+            margin: "4px 0 0 0",
+          }}
+        >
+          Studio • Customizer
+        </p>
       </div>
 
-      <div className="p-6 space-y-8">
-        {/* ① TEINTE DU BOÎTIER */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-xs font-black">
-              1
-            </div>
-            <h2 className="text-base font-black uppercase tracking-wide">
-              Teinte du boîtier
-            </h2>
-          </div>
-
-          {/* Grille de couleurs prédéfinies */}
-          <div className="grid grid-cols-6 gap-2">
-            {[
-              { color: "#1a1a1a", name: "Noir" },
-              { color: "#ffffff", name: "Blanc" },
-              { color: "#dc2626", name: "Rouge" },
-              { color: "#2563eb", name: "Bleu" },
-              { color: "#16a34a", name: "Vert" },
-              { color: "#ca8a04", name: "Jaune" },
-              { color: "#9333ea", name: "Violet" },
-              { color: "#ea580c", name: "Orange" },
-              { color: "#0891b2", name: "Cyan" },
-              { color: "#be185d", name: "Rose" },
-              { color: "#4b5563", name: "Gris" },
-              { color: "transparent", name: "Transparent" },
-            ].map((preset) => (
-              <button
-                key={preset.color}
-                onClick={() => setCassetteColor(preset.color)}
-                className={`w-10 h-10 border-2 transition-all duration-200 hover:scale-110 relative ${
-                  cassetteColor === preset.color
-                    ? "border-foreground border-4 shadow-lg"
-                    : "border-muted-foreground"
-                } ${
-                  preset.color === "transparent"
-                    ? "bg-sky-100 border-sky-300 hover:border-sky-400"
-                    : ""
-                }`}
-                style={{
-                  backgroundColor:
-                    preset.color === "transparent" ? "#e0f2fe" : preset.color,
-                }}
-                title={preset.name}
-              >
-                {preset.color === "transparent" && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-sky-100 to-sky-200 opacity-80 flex items-center justify-center">
-                    <span className="text-sky-600 text-xs font-bold">T</span>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Champ hexadécimal personnalisé */}
-          <div className="flex gap-2">
-            <div
-              className="w-12 h-12 border-2 border-muted-foreground relative"
-              style={{
-                backgroundColor:
-                  cassetteColor === "transparent" ? "#e0f2fe" : cassetteColor,
-              }}
-            >
-              {cassetteColor === "transparent" && (
-                <div className="absolute inset-0 bg-gradient-to-br from-sky-100 to-sky-200 opacity-80 flex items-center justify-center">
-                  <span className="text-sky-600 text-xs font-bold">T</span>
-                </div>
-              )}
-            </div>
-            <Input
-              type="text"
-              value={cassetteColor}
-              onChange={(e) => setCassetteColor(e.target.value)}
-              className="font-mono text-xs"
-              placeholder="#HEX ou 'transparent'"
-            />
-          </div>
-        </section>
-
-        {/* ② ÉTIQUETTE / STICKER */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-foreground text-background flex items-center justify-center text-xs font-black">
-              2
-            </div>
-            <h2 className="text-base font-black uppercase tracking-wide">
-              Étiquette / Sticker
-            </h2>
-          </div>
-
-          {/* Basculer Texte / Importer */}
-          <div className="flex border-2 border-foreground">
-            <button
-              onClick={() => setStickerMode("text")}
-              className={`flex-1 py-2 px-4 text-xs font-black uppercase transition-colors ${
-                stickerMode === "text"
-                  ? "bg-foreground text-background"
-                  : "bg-background text-foreground hover:bg-muted"
-              }`}
-            >
-              Texte
-            </button>
-            <button
-              onClick={() => setStickerMode("upload")}
-              className={`flex-1 py-2 px-4 text-xs font-black uppercase transition-colors ${
-                stickerMode === "upload"
-                  ? "bg-foreground text-background"
-                  : "bg-background text-foreground hover:bg-muted"
-              }`}
-            >
-              Importer
-            </button>
-          </div>
-
-          {stickerMode === "text" ? (
-            /* Mode texte */
-            <div className="space-y-3">
-              <Input
-                placeholder="TITRE DE L'ALBUM"
-                value={albumTitle}
-                onChange={(e) => setAlbumTitle(e.target.value)}
-                className="font-black uppercase text-sm"
-              />
-              <Input
-                placeholder="Nom de l'Artiste"
-                value={artistName}
-                onChange={(e) => setArtistName(e.target.value)}
-                className="text-sm"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  placeholder="Face A"
-                  value={faceA}
-                  onChange={(e) => setFaceA(e.target.value)}
-                  className="text-xs"
-                />
-                <Input
-                  placeholder="Face B"
-                  value={faceB}
-                  onChange={(e) => setFaceB(e.target.value)}
-                  className="text-xs"
-                />
-              </div>
-
-              {/* Couleur du sticker en mode texte */}
-              <div className="space-y-2">
-                <Label className="text-xs font-black uppercase">
-                  Couleur du texte
-                </Label>
-                <div className="grid grid-cols-8 gap-1">
-                  {[
-                    "#000000",
-                    "#ffffff",
-                    "#dc2626",
-                    "#2563eb",
-                    "#16a34a",
-                    "#ca8a04",
-                    "#9333ea",
-                    "#ea580c",
-                  ].map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setStickerColor(color)}
-                      className={`w-6 h-6 border transition-all hover:scale-110 ${
-                        stickerColor === color
-                          ? "border-foreground border-2 shadow-lg"
-                          : "border-muted-foreground"
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Mode importation */
-            <div className="space-y-3">
-              {cassetteTexture ? (
-                <div className="space-y-2">
-                  <div className="relative h-20 border-2 border-foreground overflow-hidden">
-                    <img
-                      src={cassetteTexture}
-                      alt="Étiquette"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => textureInputRef.current?.click()}
-                      className="flex-1 font-black"
-                    >
-                      CHANGER
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={removeTexture}
-                      className="border-red-300 text-red-600 hover:bg-red-500 hover:text-white font-black"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => textureInputRef.current?.click()}
-                  className="w-full h-20 border-2 border-dashed border-muted-foreground hover:bg-muted font-black"
-                >
-                  <div className="text-center">
-                    <Upload className="mx-auto h-6 w-6 mb-1" />
-                    <p className="text-xs">TÉLÉVERSER L'ÉTIQUETTE</p>
-                  </div>
-                </Button>
-              )}
-
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={extractStickerTexture}
-                  className="flex-1 text-xs border border-muted-foreground hover:border-foreground"
-                >
-                  📤 EXTRAIRE
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={downloadBaseTexture}
-                  className="flex-1 text-xs border border-muted-foreground hover:border-foreground"
-                >
-                  📥 GABARIT
-                </Button>
-              </div>
-
-              <input
-                ref={textureInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleTextureUpload}
-                className="hidden"
-              />
-            </div>
-          )}
-        </section>
-
-        <div className="border-t-4 border-foreground pt-6 space-y-4">
-          <div className="bg-foreground text-background p-4">
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-black uppercase">Total</span>
-              <span className="text-xl font-black font-mono">
-                {calculatePrice().toFixed(2)}€
-              </span>
-            </div>
-            <div className="text-xs opacity-80 mt-1">
-              Base: 12,90€{" "}
-              {(cassetteTexture || albumTitle) && "+ Étiquette: 3,00€"}
-            </div>
-          </div>
-
-          <Button className="w-full h-12 bg-foreground text-background hover:bg-foreground/90 font-black text-sm uppercase tracking-wider border-2 border-foreground">
-            💾 Ajouter au panier
-          </Button>
-
-          <p className="text-xs text-center text-muted-foreground font-mono">
-            Expédition sous 3–5 jours
-          </p>
-        </div>
+      {/* Content */}
+      <div className="overflow-y-auto flex-1">
+        <SidebarContent
+          stickerColor={stickerColor}
+          setStickerColor={setStickerColor}
+          cassetteColor={cassetteColor}
+          setCassetteColor={setCassetteColor}
+          cassetteTexture={cassetteTexture}
+          setCassetteTexture={setCassetteTexture}
+          textureInputRef={textureInputRef}
+          calculatePrice={calculatePrice}
+          handleTextureUpload={handleTextureUpload}
+          removeTexture={removeTexture}
+          extractStickerTexture={extractStickerTexture}
+          downloadBaseTexture={downloadBaseTexture}
+          isMobile={false}
+        />
       </div>
     </div>
   );
 };
 
+// Mobile Sidebar Bottom Sheet
+const MobileSidebar = ({
+  stickerColor,
+  setStickerColor,
+  cassetteColor,
+  setCassetteColor,
+  cassetteTexture,
+  setCassetteTexture,
+  isOpen,
+  onClose,
+}: SidebarProps & { isOpen: boolean; onClose: () => void }) => {
+  const textureInputRef = useRef<HTMLInputElement>(null);
+
+  const calculatePrice = () => 12.9 + (cassetteTexture ? 3.0 : 0);
+
+  const handleTextureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setCassetteTexture(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeTexture = () => {
+    setCassetteTexture(null);
+    if (textureInputRef.current) {
+      textureInputRef.current.value = "";
+    }
+  };
+
+  const extractStickerTexture = () => {
+    try {
+      const scene = (window as CustomWindow).cassetteScene;
+      if (!scene) {
+        throw new Error("3D scene not available");
+      }
+
+      let stickerMesh: THREE.Mesh | null = null;
+      scene.traverse((child: THREE.Object3D) => {
+        if (child.name === "Sticker" && (child as THREE.Mesh).isMesh) {
+          stickerMesh = child as THREE.Mesh;
+        }
+      });
+
+      if (!stickerMesh || !(stickerMesh as THREE.Mesh).material) {
+        throw new Error("Sticker mesh not found");
+      }
+
+      const material = (stickerMesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if (!material.map || !material.map.image) {
+        throw new Error("No texture found on sticker");
+      }
+
+      const img = material.map.image as HTMLImageElement;
+      const width = img.width || 512;
+      const height = img.height || 512;
+      const canvas = document.createElement("canvas");
+      const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+
+      canvas.width = width;
+      canvas.height = height;
+      renderer.setSize(width, height);
+
+      const tempScene = new THREE.Scene();
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const geometry = new THREE.PlaneGeometry(2, 2);
+      const tempMaterial = new THREE.MeshBasicMaterial({ map: material.map });
+      tempScene.add(new THREE.Mesh(geometry, tempMaterial));
+
+      renderer.render(tempScene, camera);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "sticker-texture.png";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+
+        renderer.dispose();
+        geometry.dispose();
+        tempMaterial.dispose();
+      }, "image/png");
+    } catch (error) {
+      console.error("Error extracting texture:", error);
+      downloadBaseTexture();
+    }
+  };
+
+  const downloadBaseTexture = async () => {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 3500;
+      canvas.height = 1656;
+      const ctx = canvas.getContext("2d");
+      const scaleX = canvas.width / 512;
+      const scaleY = canvas.height / 256;
+      const sx = (value: number) => value * scaleX;
+      const sy = (value: number) => value * scaleY;
+
+      if (!ctx) {
+        return;
+      }
+
+      ctx.fillStyle = colors.canvas;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = colors.hairline;
+      ctx.lineWidth = Math.max(2, Math.round(scaleX));
+      ctx.strokeRect(sx(5), sy(5), sx(502), sy(246));
+
+      ctx.fillStyle = colors.surface;
+      ctx.beginPath();
+      ctx.roundRect(sx(30), sy(40), sx(452), sy(60), Math.max(8, sx(8)));
+      ctx.fill();
+
+      ctx.fillStyle = colors.charcoal;
+      ctx.font = `bold ${Math.max(24, Math.round(24 * scaleY))}px ${typography.fontFamily.primary}`;
+      ctx.textAlign = "center";
+      ctx.fillText("ALBUM TITLE", sx(256), sy(75));
+
+      ctx.fillStyle = colors.surface;
+      ctx.beginPath();
+      ctx.roundRect(sx(30), sy(120), sx(452), sy(40), Math.max(6, sx(6)));
+      ctx.fill();
+
+      ctx.fillStyle = colors.slate;
+      ctx.font = `${Math.max(18, Math.round(18 * scaleY))}px ${typography.fontFamily.primary}`;
+      ctx.fillText("Artist Name", sx(256), sy(145));
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cassette-template.png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    } catch (error) {
+      console.error("Error generating template:", error);
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            zIndex: 30,
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        />
+      )}
+
+      {/* Bottom Sheet */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: colors.canvas,
+          borderTopLeftRadius: borderRadius.lg,
+          borderTopRightRadius: borderRadius.lg,
+          boxShadow: `0 -4px 12px rgba(0, 0, 0, 0.1)`,
+          zIndex: 40,
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          transform: isOpen ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 0.3s ease-out",
+          fontFamily: typography.fontFamily.primary,
+        }}
+      >
+        {/* Header Handle */}
+        <div
+          style={{
+            padding: "12px",
+            display: "flex",
+            justifyContent: "center",
+            borderBottomWidth: "1px",
+            borderBottomColor: colors.hairline,
+          }}
+        >
+          <div
+            style={{
+              width: "40px",
+              height: "4px",
+              backgroundColor: colors.hairline,
+              borderRadius: borderRadius.full,
+            }}
+          />
+        </div>
+
+        {/* Title */}
+        <div
+          style={{
+            padding: "16px",
+            backgroundColor: colors.primary,
+            color: colors.onDark,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>
+              TAPE CRAFT
+            </h2>
+            <p
+              style={{
+                fontSize: "12px",
+                color: colors.onDarkMuted,
+                margin: "4px 0 0 0",
+                fontWeight: 500,
+              }}
+            >
+              Studio • Customizer
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "4px",
+              color: colors.onDark,
+              display: "flex",
+            }}
+          >
+            <ChevronUp size={24} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto flex-1">
+          <SidebarContent
+            stickerColor={stickerColor}
+            setStickerColor={setStickerColor}
+            cassetteColor={cassetteColor}
+            setCassetteColor={setCassetteColor}
+            cassetteTexture={cassetteTexture}
+            setCassetteTexture={setCassetteTexture}
+            textureInputRef={textureInputRef}
+            calculatePrice={calculatePrice}
+            handleTextureUpload={handleTextureUpload}
+            removeTexture={removeTexture}
+            extractStickerTexture={extractStickerTexture}
+            downloadBaseTexture={downloadBaseTexture}
+            isMobile={true}
+          />
+        </div>
+      </div>
+    </>
+  );
+};
+
+
+
 export default function App() {
-  const [stickerColor, setStickerColor] = useState("#ffffff");
-  const [cassetteColor, setCassetteColor] = useState("#ffffff");
+  const isMobile = useMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const [stickerColor, setStickerColor] = useState(colors.canvas);
+  const [cassetteColor, setCassetteColor] = useState(colors.canvas);
   const [cassetteTexture, setCassetteTexture] = useState<string | null>(null);
+  
+  const labelRotation = 90;
+  const labelOffsetX = 0;
+  const labelOffsetY = 0.5;
+  const labelScaleX = 2;
+  const labelScaleY = 2;
+  const labelMirrorX = false;
+  const labelMirrorY = true;
   const scale = 1;
 
   return (
-    <div className="relative">
+    <div style={{ 
+      display: "flex", 
+      position: "relative", 
+      height: "100vh",
+      flexDirection: isMobile ? "column" : "row",
+    }}>
       <Leva hidden />
+
+      {/* Mobile Header */}
+      {isMobile && (
+        <div
+          style={{
+            backgroundColor: colors.primary,
+            color: colors.onDark,
+            padding: "12px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: `1px solid ${colors.hairline}`,
+            zIndex: 20,
+          }}
+        >
+          <div>
+            <h1 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
+              TAPE CRAFT
+            </h1>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "4px",
+              color: colors.onDark,
+              display: "flex",
+              alignItems: "center",
+              fontSize: "24px",
+            }}
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+      )}
+
+      {/* Canvas Container */}
       <Canvas
         shadows={false}
         camera={{ position: [0, 0, 2.5], fov: 50 }}
-        style={{ height: "100vh", width: "calc(100vw - 320px)" }}
+        style={{ 
+          flex: 1,
+          backgroundColor: colors.canvas,
+          width: isMobile ? "100%" : "calc(100vw - 320px)",
+        }}
       >
-        {/* Environnement 3D sphérique en arrière-plan */}
+        {/* 3D Environment */}
         <Environment3D />
 
-        {/* Éclairage dynamique sophistiqué style Apple */}
+        {/* Apple Studio Lighting */}
         <DynamicLighting lighting={appleLighting} />
 
-        {/* Lightbox qui suit la caméra */}
-        <CameraLightbox intensity={0.35} color="#ffffff" distance={2.2} />
+        {/* Camera Lightbox */}
+        <CameraLightbox intensity={0.35} color={colors.canvas} distance={2.2} />
 
-        {/* Particules flottantes */}
+        {/* Floating Particles */}
         <FloatingParticles />
 
         <Suspense fallback={<Loader />}>
@@ -1033,6 +1652,13 @@ export default function App() {
             scale={scale}
             texture={cassetteTexture}
             cassetteColor={cassetteColor}
+            labelRotation={labelRotation}
+            labelOffsetX={labelOffsetX}
+            labelOffsetY={labelOffsetY}
+            labelScaleX={labelScaleX}
+            labelScaleY={labelScaleY}
+            labelMirrorX={labelMirrorX}
+            labelMirrorY={labelMirrorY}
           />
         </Suspense>
 
@@ -1048,14 +1674,31 @@ export default function App() {
         />
       </Canvas>
 
-      <Sidebar
-        stickerColor={stickerColor}
-        setStickerColor={setStickerColor}
-        cassetteColor={cassetteColor}
-        setCassetteColor={setCassetteColor}
-        cassetteTexture={cassetteTexture}
-        setCassetteTexture={setCassetteTexture}
-      />
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sidebar
+          stickerColor={stickerColor}
+          setStickerColor={setStickerColor}
+          cassetteColor={cassetteColor}
+          setCassetteColor={setCassetteColor}
+          cassetteTexture={cassetteTexture}
+          setCassetteTexture={setCassetteTexture}
+        />
+      )}
+
+      {/* Mobile Sidebar (Bottom Sheet) */}
+      {isMobile && (
+        <MobileSidebar
+          stickerColor={stickerColor}
+          setStickerColor={setStickerColor}
+          cassetteColor={cassetteColor}
+          setCassetteColor={setCassetteColor}
+          cassetteTexture={cassetteTexture}
+          setCassetteTexture={setCassetteTexture}
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }

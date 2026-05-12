@@ -2,13 +2,38 @@
 
 @layer base {
   :root {
+    /* Notion Design System - Colors */
+    --color-primary: #7c3aed;
+    --color-primary-pressed: #6d28d9;
+    --color-primary-deep: #5b21b6;
+    
+    --color-brand-navy: #1a1f35;
+    --color-brand-navy-deep: #0f1419;
+    --color-brand-navy-mid: #2d3142;
+    
+    --color-canvas: #ffffff;
+    --color-surface: #f9fafb;
+    --color-surface-soft: #f3f4f6;
+    --color-hairline: #e5e7eb;
+    --color-hairline-strong: #d1d5db;
+    --color-hairline-soft: #f0f0f0;
+    
+    --color-ink: #1a1a1a;
+    --color-ink-deep: #000000;
+    --color-charcoal: #4b5563;
+    --color-slate: #6b7280;
+    --color-steel: #9ca3af;
+    --color-stone: #d1d5db;
+    --color-muted: #e5e7eb;
+    
+    /* Tailwind Legacy */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 261 80% 50%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -20,7 +45,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 261 80% 50%;
     --radius: 0.5rem;
   }
 
@@ -44,6 +69,37 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+  }
+
+  /* Global Typography */
+  * {
+    font-family: -apple-system, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
 }
 
