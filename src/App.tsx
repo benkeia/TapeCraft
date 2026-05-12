@@ -4,7 +4,12 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Html, useProgress } from "@react-three/drei";
 import { Leva, useControls } from "leva";
 import * as THREE from "three";
-import { colors, borderRadius, typography, lightingPresets } from "@/lib/design-tokens";
+import {
+  colors,
+  borderRadius,
+  typography,
+  lightingPresets,
+} from "@/lib/design-tokens";
 import { useMobile } from "@/lib/responsive";
 
 interface CustomWindow extends Window {
@@ -48,8 +53,8 @@ interface SidebarProps {
 }
 
 function Loader() {
-  const { progress } = useProgress()
-  const barRef = useRef<HTMLDivElement>(null)
+  const { progress } = useProgress();
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (barRef.current) {
@@ -57,46 +62,54 @@ function Loader() {
         width: `${progress}%`,
         duration: 0.5,
         ease: "power3.out",
-      })
+      });
     }
-  }, [progress])
+  }, [progress]);
 
   return (
     <Html center>
       <div className="flex flex-col items-center gap-4">
-        <div style={{ 
-          width: '240px', 
-          height: '3px', 
-          backgroundColor: colors.hairline,
-          borderRadius: borderRadius.full,
-          overflow: 'hidden',
-          boxShadow: `0 0 16px rgba(124, 58, 237, 0.1)`
-        }}>
-          <div 
-            ref={barRef} 
-            style={{ 
-              width: '0%', 
-              height: '100%', 
+        <div
+          style={{
+            width: "240px",
+            height: "3px",
+            backgroundColor: colors.hairline,
+            borderRadius: borderRadius.full,
+            overflow: "hidden",
+            boxShadow: `0 0 16px rgba(124, 58, 237, 0.1)`,
+          }}
+        >
+          <div
+            ref={barRef}
+            style={{
+              width: "0%",
+              height: "100%",
               background: `linear-gradient(90deg, ${colors.primary}, ${colors.primaryDeep})`,
               borderRadius: borderRadius.full,
-              transition: 'width 0.3s ease-out'
+              transition: "width 0.3s ease-out",
             }}
           />
         </div>
-        <div style={{ 
-          fontSize: '13px', 
-          color: colors.slate,
-          fontWeight: 500,
-          fontFamily: typography.fontFamily.primary
-        }}>
+        <div
+          style={{
+            fontSize: "13px",
+            color: colors.slate,
+            fontWeight: 500,
+            fontFamily: typography.fontFamily.primary,
+          }}
+        >
           Chargement... {Math.round(progress)}%
         </div>
       </div>
     </Html>
-  )
+  );
 }
 
-const DynamicLighting = ({ lighting }: { lighting: typeof lightingPresets.appleStudio }) => {
+const DynamicLighting = ({
+  lighting,
+}: {
+  lighting: typeof lightingPresets.appleStudio;
+}) => {
   const keyPos = lighting.key.position as [number, number, number];
   const fillPos = lighting.fill.position as [number, number, number];
   const rimPos = lighting.rim.position as [number, number, number];
@@ -322,8 +335,6 @@ function Cassette({
   const [isTransparent, setIsTransparent] = useState(false);
   const originalImageRef = useRef<HTMLImageElement | null>(null);
 
-
-
   // Contrôles Leva pour le matériau de transmission
   const materialProps = useControls("Transmission Material", {
     thickness: { value: 0.5, min: 0, max: 3, step: 0.05 },
@@ -354,29 +365,53 @@ function Cassette({
     }
 
     const geometry = stickerMesh.geometry as THREE.BufferGeometry;
-    const uvAttribute = geometry.attributes.uv as THREE.BufferAttribute | undefined;
+    const uvAttribute = geometry.attributes.uv as
+      | THREE.BufferAttribute
+      | undefined;
 
     if (!uvAttribute) {
       setStickerUvBounds(null);
       return;
     }
 
-    let minU = Infinity;
-    let maxU = -Infinity;
-    let minV = Infinity;
-    let maxV = -Infinity;
+    // On met en cache les limites UV d'origine pour éviter la boucle infinie
+    if (!geometry.userData.originalBounds) {
+      let minU = Infinity;
+      let maxU = -Infinity;
+      let minV = Infinity;
+      let maxV = -Infinity;
 
-    for (let index = 0; index < uvAttribute.count; index += 1) {
-      const u = uvAttribute.getX(index);
-      const v = uvAttribute.getY(index);
+      for (let i = 0; i < uvAttribute.count; i += 1) {
+        const u = uvAttribute.getX(i);
+        const v = uvAttribute.getY(i);
+        minU = Math.min(minU, u);
+        maxU = Math.max(maxU, u);
+        minV = Math.min(minV, v);
+        maxV = Math.max(maxV, v);
+      }
 
-      minU = Math.min(minU, u);
-      maxU = Math.max(maxU, u);
-      minV = Math.min(minV, v);
-      maxV = Math.max(maxV, v);
+      geometry.userData.originalBounds = { minU, maxU, minV, maxV };
     }
 
-    setStickerUvBounds({ minU, maxU, minV, maxV });
+    const { minU, maxU, minV, maxV } = geometry.userData.originalBounds;
+    const midU = (minU + maxU) / 2;
+
+    if (!geometry.userData.uvsFolded) {
+      for (let i = 0; i < uvAttribute.count; i += 1) {
+        const u = uvAttribute.getX(i);
+        const v = uvAttribute.getY(i);
+
+        if (u > midU) {
+          const newU = minU + (maxU - u);
+          const newV = minV + (maxV - v);
+          uvAttribute.setXY(i, newU, newV);
+        }
+      }
+      uvAttribute.needsUpdate = true;
+      geometry.userData.uvsFolded = true;
+    }
+
+    setStickerUvBounds({ minU, maxU: midU, minV, maxV });
   }, [scene]);
 
   // Charger la texture si fournie
@@ -386,12 +421,15 @@ function Cassette({
       loader.load(
         texture,
         (loadedTexture) => {
-          // Empêche l'effet de "prolongement" hors UV (tiling involontaire)
-          loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
-          loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
+          // Utiliser RepeatWrapping pour afficher l'image proprement sur les deux faces
+          // au lieu d'étirer les pixels des bords (ClampToEdgeWrapping)
+          loadedTexture.wrapS = THREE.RepeatWrapping;
+          loadedTexture.wrapT = THREE.RepeatWrapping;
           loadedTexture.flipY = false;
           loadedTexture.needsUpdate = true;
-          const image = loadedTexture.image as { width?: number; height?: number } | undefined;
+          const image = loadedTexture.image as
+            | { width?: number; height?: number }
+            | undefined;
           if (image?.width && image?.height) {
             setTextureAspect(image.width / image.height);
           }
@@ -418,8 +456,14 @@ function Cassette({
       return;
     }
 
-    const uvWidth = Math.max(stickerUvBounds.maxU - stickerUvBounds.minU, 0.0001);
-    const uvHeight = Math.max(stickerUvBounds.maxV - stickerUvBounds.minV, 0.0001);
+    const uvWidth = Math.max(
+      stickerUvBounds.maxU - stickerUvBounds.minU,
+      0.0001,
+    );
+    const uvHeight = Math.max(
+      stickerUvBounds.maxV - stickerUvBounds.minV,
+      0.0001,
+    );
     const targetAspect = uvWidth / uvHeight;
     const rotationRadians = THREE.MathUtils.degToRad(labelRotation);
     const mirrorScaleX = labelMirrorX ? -1 : 1;
@@ -430,12 +474,17 @@ function Cassette({
     let fitOffsetX = 0;
     let fitOffsetY = 0;
 
-    if (textureAspect > targetAspect) {
-      fitRepeatY = targetAspect / textureAspect;
-      fitOffsetY = (1 - fitRepeatY) / 2;
-    } else {
-      fitRepeatX = textureAspect / targetAspect;
+    const isRotated = labelRotation % 180 !== 0;
+    const effectiveTextureAspect = isRotated
+      ? 1 / textureAspect
+      : textureAspect;
+
+    if (effectiveTextureAspect > targetAspect) {
+      fitRepeatX = targetAspect / effectiveTextureAspect;
       fitOffsetX = (1 - fitRepeatX) / 2;
+    } else {
+      fitRepeatY = effectiveTextureAspect / targetAspect;
+      fitOffsetY = (1 - fitRepeatY) / 2;
     }
 
     const normalizeMatrix = new THREE.Matrix3().setUvTransform(
@@ -468,10 +517,13 @@ function Cassette({
       0,
     );
 
-    textureMap.wrapS = THREE.ClampToEdgeWrapping;
-    textureMap.wrapT = THREE.ClampToEdgeWrapping;
+    textureMap.wrapS = THREE.RepeatWrapping;
+    textureMap.wrapT = THREE.RepeatWrapping;
     textureMap.matrixAutoUpdate = false;
-    textureMap.matrix.copy(userMatrix).multiply(fitMatrix).multiply(normalizeMatrix);
+    textureMap.matrix
+      .copy(userMatrix)
+      .multiply(fitMatrix)
+      .multiply(normalizeMatrix);
     textureMap.needsUpdate = true;
   }, [
     textureMap,
@@ -491,27 +543,27 @@ function Cassette({
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
         const material = mesh.material as THREE.MeshStandardMaterial;
-        
+
         if (material) {
           // Object_2 (id 54): Plastique transparent, jamais affecté par la coloration
           if (mesh.name === "Object_2") {
             mesh.material = new THREE.MeshPhysicalMaterial({
               ...materialProps,
               transmission: 0.9,
-              transparent: true,
-              opacity: 0.15,
               roughness: 0.05,
-              thickness: 0.3,
-              ior: 1.5,
+              thickness: 0,
+              ior: 1.0,
               color: new THREE.Color("#ffffff"),
               side: THREE.DoubleSide,
+              transparent: true,
+              opacity: 1,
             });
           }
           // Object_3: Toujours #120e0c, jamais changé
           else if (mesh.name === "Object_3") {
             mesh.material = material.clone();
             const newMaterial = mesh.material as THREE.MeshStandardMaterial;
-            newMaterial.color = new THREE.Color("#120e0c");
+            newMaterial.color = new THREE.Color("#3A2014");
             newMaterial.map = null;
             newMaterial.needsUpdate = true;
           }
@@ -533,68 +585,76 @@ function Cassette({
               // Garder le matériau original avec sa texture
               mesh.material = material.clone();
               const newMaterial = mesh.material as THREE.MeshStandardMaterial;
-              
-              const colorValue = cassetteColor === "transparent" ? "#ffffff" : cassetteColor;
-              newMaterial.roughness = 0.15;
+
+              const colorValue =
+                cassetteColor === "transparent" ? "#ffffff" : cassetteColor;
+              newMaterial.roughness = 0.4;
               newMaterial.metalness = 0.2;
-              
+              newMaterial.normalScale = new THREE.Vector2(0.2, 0.2);
+
               // Si une texture map est présente, créer une texture modifiée avec le masque noir
               if (newMaterial.map && newMaterial.map.image) {
                 // On sauvegarde l'image d'origine au premier passage
                 if (!originalImageRef.current) {
-                  originalImageRef.current = newMaterial.map.image as HTMLImageElement;
+                  originalImageRef.current = newMaterial.map
+                    .image as HTMLImageElement;
                 }
-                
+
                 // On utilise toujours notre sauvegarde comme source de vérité
                 const sourceImage = originalImageRef.current;
-                
+
                 const canvas = document.createElement("canvas");
                 canvas.width = sourceImage.width;
                 canvas.height = sourceImage.height;
-                
+
                 const ctx = canvas.getContext("2d");
                 if (ctx) {
                   // Dessiner l'image originale
                   ctx.drawImage(sourceImage, 0, 0);
-                  
+
                   // Récupérer les données de pixels
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const imageData = ctx.getImageData(
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height,
+                  );
                   const data = imageData.data;
-                  
+
                   // Convertir la couleur choisie en RGB
                   const tempColor = new THREE.Color(colorValue);
                   const r = Math.round(tempColor.r * 255);
                   const g = Math.round(tempColor.g * 255);
                   const b = Math.round(tempColor.b * 255);
-                  
+
                   // Boucler sur les pixels et remplacer les noirs
                   for (let i = 0; i < data.length; i += 4) {
                     const pixelR = data[i];
                     const pixelG = data[i + 1];
                     const pixelB = data[i + 2];
-                    
+
                     // Déterminer si le pixel est noir (tous les canaux < 50)
                     if (pixelR < 50 && pixelG < 50 && pixelB < 50) {
-                      data[i] = r;      // R
-                      data[i + 1] = g;  // G
-                      data[i + 2] = b;  // B
+                      data[i] = r; // R
+                      data[i + 1] = g; // G
+                      data[i + 2] = b; // B
                       // data[i + 3] reste inchangé (alpha)
                     }
                   }
-                  
+
                   // Écrire les données modifiées
                   ctx.putImageData(imageData, 0, 0);
-                  
+
                   // Créer une nouvelle texture à partir du canvas
                   const newTexture = new THREE.CanvasTexture(canvas);
                   newTexture.wrapS = THREE.ClampToEdgeWrapping;
                   newTexture.wrapT = THREE.ClampToEdgeWrapping;
                   newTexture.flipY = false;
-                  
+
                   newMaterial.map = newTexture;
                 }
               }
-              
+
               newMaterial.needsUpdate = true;
             }
           }
@@ -662,12 +722,12 @@ function CameraLightbox({
 
   // Relative positions around camera
   const offsets: Array<[number, number, number]> = [
-    [0, 0.5, 0],    // top
-    [0, -0.5, 0],   // bottom
-    [-0.5, 0, 0],   // left
-    [0.5, 0, 0],    // right
-    [0, 0, 0.5],    // front
-    [0, 0, -0.5],   // back
+    [0, 0.5, 0], // top
+    [0, -0.5, 0], // bottom
+    [-0.5, 0, 0], // left
+    [0.5, 0, 0], // right
+    [0, 0, 0.5], // front
+    [0, 0, -0.5], // back
   ];
 
   useFrame(() => {
@@ -745,17 +805,23 @@ const SidebarContent = ({
     <div className={isMobile ? "space-y-6" : "space-y-8"}>
       {/* Cassette Color Section */}
       <section className="space-y-4">
-        <div style={{
-          fontSize: typography.sizes.bodySmMedium.fontSize,
-          fontWeight: 600,
-          color: colors.ink,
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-        }}>
+        <div
+          style={{
+            fontSize: typography.sizes.bodySmMedium.fontSize,
+            fontWeight: 600,
+            color: colors.ink,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
           Cassette Shell
         </div>
 
-        <div className={isMobile ? "grid grid-cols-5 gap-2" : "grid grid-cols-6 gap-2"}>
+        <div
+          className={
+            isMobile ? "grid grid-cols-5 gap-2" : "grid grid-cols-6 gap-2"
+          }
+        >
           {colorPresets.map((preset) => (
             <button
               key={preset.color}
@@ -765,19 +831,27 @@ const SidebarContent = ({
                 width: isMobile ? "36px" : "40px",
                 height: isMobile ? "36px" : "40px",
                 borderRadius: borderRadius.md,
-                backgroundColor: preset.color === "transparent" ? colors.cardTintSky : preset.color,
+                backgroundColor:
+                  preset.color === "transparent"
+                    ? colors.cardTintSky
+                    : preset.color,
                 border: `2px solid ${cassetteColor === preset.color ? colors.primary : colors.hairline}`,
-                boxShadow: cassetteColor === preset.color ? `0 0 0 2px ${colors.canvas}, 0 0 8px ${colors.primary}40` : "none",
+                boxShadow:
+                  cassetteColor === preset.color
+                    ? `0 0 0 2px ${colors.canvas}, 0 0 8px ${colors.primary}40`
+                    : "none",
                 cursor: "pointer",
               }}
               title={preset.label}
             >
               {preset.color === "transparent" && (
-                <span style={{
-                  fontSize: "9px",
-                  fontWeight: 700,
-                  color: colors.primary,
-                }}>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    color: colors.primary,
+                  }}
+                >
                   T
                 </span>
               )}
@@ -788,12 +862,15 @@ const SidebarContent = ({
         {/* Custom Color Input */}
         <div className="space-y-2">
           <div style={{ display: "flex", gap: "8px" }}>
-            <div 
+            <div
               style={{
                 width: isMobile ? "40px" : "48px",
                 height: isMobile ? "40px" : "48px",
                 borderRadius: borderRadius.md,
-                backgroundColor: cassetteColor === "transparent" ? colors.cardTintSky : cassetteColor,
+                backgroundColor:
+                  cassetteColor === "transparent"
+                    ? colors.cardTintSky
+                    : cassetteColor,
                 border: `1px solid ${colors.hairline}`,
                 flexShrink: 0,
               }}
@@ -819,13 +896,15 @@ const SidebarContent = ({
 
       {/* Label Section */}
       <section className="space-y-4">
-        <div style={{
-          fontSize: typography.sizes.bodySmMedium.fontSize,
-          fontWeight: 600,
-          color: colors.ink,
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-        }}>
+        <div
+          style={{
+            fontSize: typography.sizes.bodySmMedium.fontSize,
+            fontWeight: 600,
+            color: colors.ink,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+          }}
+        >
           Label Design
         </div>
 
@@ -833,7 +912,7 @@ const SidebarContent = ({
           <div className="space-y-3">
             {/* Color Picker for Label */}
             <div>
-              <Label 
+              <Label
                 style={{
                   fontSize: "11px",
                   fontWeight: 600,
@@ -845,7 +924,13 @@ const SidebarContent = ({
               >
                 Label Color
               </Label>
-              <div className={isMobile ? "grid grid-cols-6 gap-1" : "grid grid-cols-8 gap-1.5"}>
+              <div
+                className={
+                  isMobile
+                    ? "grid grid-cols-6 gap-1"
+                    : "grid grid-cols-8 gap-1.5"
+                }
+              >
                 {colorPresets.slice(0, 8).map((preset) => (
                   <button
                     key={preset.color}
@@ -855,10 +940,19 @@ const SidebarContent = ({
                       width: isMobile ? "24px" : "28px",
                       height: isMobile ? "24px" : "28px",
                       borderRadius: borderRadius.sm,
-                      backgroundColor: preset.color === "transparent" ? colors.cardTintSky : preset.color,
-                      border: stickerColor === preset.color ? `2px solid ${colors.primary}` : `1px solid ${colors.hairline}`,
+                      backgroundColor:
+                        preset.color === "transparent"
+                          ? colors.cardTintSky
+                          : preset.color,
+                      border:
+                        stickerColor === preset.color
+                          ? `2px solid ${colors.primary}`
+                          : `1px solid ${colors.hairline}`,
                       cursor: "pointer",
-                      boxShadow: stickerColor === preset.color ? `0 0 0 1px ${colors.canvas}, 0 0 6px ${colors.primary}40` : "none",
+                      boxShadow:
+                        stickerColor === preset.color
+                          ? `0 0 0 1px ${colors.canvas}, 0 0 6px ${colors.primary}40`
+                          : "none",
                     }}
                   />
                 ))}
@@ -893,7 +987,7 @@ const SidebarContent = ({
         ) : (
           <div className="space-y-3">
             {/* Texture Preview */}
-            <div 
+            <div
               style={{
                 position: "relative",
                 height: isMobile ? "60px" : "80px",
@@ -980,17 +1074,17 @@ const SidebarContent = ({
           </Button>
         </div>
 
-        <input 
-          ref={textureInputRef} 
-          type="file" 
-          accept="image/*" 
-          onChange={handleTextureUpload} 
-          className="hidden" 
+        <input
+          ref={textureInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleTextureUpload}
+          className="hidden"
         />
       </section>
 
       {/* Pricing Section */}
-      <div 
+      <div
         style={{
           backgroundColor: colors.surface,
           padding: "16px",
@@ -998,40 +1092,48 @@ const SidebarContent = ({
           border: `1px solid ${colors.hairline}`,
         }}
       >
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "8px",
-        }}>
-          <span style={{
-            fontSize: typography.sizes.bodySmMedium.fontSize,
-            fontWeight: 600,
-            color: colors.slate,
-            textTransform: "uppercase",
-          }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "8px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: typography.sizes.bodySmMedium.fontSize,
+              fontWeight: 600,
+              color: colors.slate,
+              textTransform: "uppercase",
+            }}
+          >
             Total
           </span>
-          <span style={{
-            fontSize: "20px",
-            fontWeight: 700,
-            color: colors.primary,
-            fontFamily: "monospace",
-          }}>
+          <span
+            style={{
+              fontSize: "20px",
+              fontWeight: 700,
+              color: colors.primary,
+              fontFamily: "monospace",
+            }}
+          >
             {calculatePrice().toFixed(2)}€
           </span>
         </div>
-        <div style={{
-          fontSize: "11px",
-          color: colors.slate,
-          lineHeight: 1.4,
-        }}>
+        <div
+          style={{
+            fontSize: "11px",
+            color: colors.slate,
+            lineHeight: 1.4,
+          }}
+        >
           Base: 12.90€ {cassetteTexture && "+ Label: 3.00€"}
         </div>
       </div>
 
       {/* Add to Cart Button */}
-      <Button 
+      <Button
         className="w-full"
         style={{
           backgroundColor: colors.primary,
@@ -1052,12 +1154,14 @@ const SidebarContent = ({
       </Button>
 
       {/* Shipping Info */}
-      <p style={{
-        fontSize: "11px",
-        textAlign: "center",
-        color: colors.slate,
-        fontFamily: "monospace",
-      }}>
+      <p
+        style={{
+          fontSize: "11px",
+          textAlign: "center",
+          color: colors.slate,
+          fontFamily: "monospace",
+        }}
+      >
         Ships in 3–5 days
       </p>
     </div>
@@ -1116,7 +1220,8 @@ const Sidebar = ({
         throw new Error("Sticker mesh not found");
       }
 
-      const material = (stickerMesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const material = (stickerMesh as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial;
       if (!material.map || !material.map.image) {
         throw new Error("No texture found on sticker");
       }
@@ -1125,7 +1230,10 @@ const Sidebar = ({
       const width = img.width || 512;
       const height = img.height || 512;
       const canvas = document.createElement("canvas");
-      const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        preserveDrawingBuffer: true,
+      });
 
       canvas.width = width;
       canvas.height = height;
@@ -1219,7 +1327,7 @@ const Sidebar = ({
   };
 
   return (
-    <div 
+    <div
       className="hidden lg:fixed lg:flex right-0 top-0 h-full bg-white border-l flex-col z-10"
       style={{
         width: "320px",
@@ -1229,7 +1337,7 @@ const Sidebar = ({
       }}
     >
       {/* Header */}
-      <div 
+      <div
         className="sticky top-0 p-6 border-b"
         style={{
           backgroundColor: colors.primary,
@@ -1238,7 +1346,7 @@ const Sidebar = ({
           zIndex: 20,
         }}
       >
-        <h1 
+        <h1
           style={{
             fontSize: typography.sizes.heading3.fontSize,
             fontWeight: 600,
@@ -1249,7 +1357,7 @@ const Sidebar = ({
         >
           TAPE CRAFT
         </h1>
-        <p 
+        <p
           style={{
             fontSize: "12px",
             color: colors.onDarkMuted,
@@ -1337,7 +1445,8 @@ const MobileSidebar = ({
         throw new Error("Sticker mesh not found");
       }
 
-      const material = (stickerMesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const material = (stickerMesh as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial;
       if (!material.map || !material.map.image) {
         throw new Error("No texture found on sticker");
       }
@@ -1346,7 +1455,10 @@ const MobileSidebar = ({
       const width = img.width || 512;
       const height = img.height || 512;
       const canvas = document.createElement("canvas");
-      const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        preserveDrawingBuffer: true,
+      });
 
       canvas.width = width;
       canvas.height = height;
@@ -1559,32 +1671,32 @@ const MobileSidebar = ({
   );
 };
 
-
-
 export default function App() {
   const isMobile = useMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   const [stickerColor, setStickerColor] = useState(colors.canvas);
   const [cassetteColor, setCassetteColor] = useState(colors.canvas);
   const [cassetteTexture, setCassetteTexture] = useState<string | null>(null);
-  
+
   const labelRotation = 90;
   const labelOffsetX = 0;
-  const labelOffsetY = 0.5;
-  const labelScaleX = 2;
-  const labelScaleY = 2;
+  const labelOffsetY = 0;
+  const labelScaleX = 1;
+  const labelScaleY = 1;
   const labelMirrorX = false;
   const labelMirrorY = true;
   const scale = 1;
 
   return (
-    <div style={{ 
-      display: "flex", 
-      position: "relative", 
-      height: "100vh",
-      flexDirection: isMobile ? "column" : "row",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        position: "relative",
+        height: "100vh",
+        flexDirection: isMobile ? "column" : "row",
+      }}
+    >
       <Leva hidden />
 
       {/* Mobile Header */}
@@ -1628,7 +1740,7 @@ export default function App() {
       <Canvas
         shadows={false}
         camera={{ position: [0, 0, 2.5], fov: 50 }}
-        style={{ 
+        style={{
           flex: 1,
           backgroundColor: colors.canvas,
           width: isMobile ? "100%" : "calc(100vw - 320px)",
