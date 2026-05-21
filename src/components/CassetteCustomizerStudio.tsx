@@ -15,7 +15,7 @@ export function CassetteCustomizerStudio({
   initialPrice = 12.9,
 }: CassettCustomizerStudioProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("shell");
-  const [price, setPrice] = useState(initialPrice);
+  const [price] = useState(initialPrice);
 
   const handleSaveDesign = useCallback(() => {
     console.log("Design saved");
