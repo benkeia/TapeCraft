@@ -1,0 +1,29 @@
+/* Studio Global Styles */
+
+/* Main background gradient for preview area */
+.main-bg-gradient {
+  background:
+    radial-gradient(circle at center, rgba(139, 92, 246, 0.22) 0%, rgba(20, 20, 25, 0) 58%),
+    linear-gradient(180deg, #141419 0%, #101015 100%);
+}
+
+/* Scrollbar hiding utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Color swatch active state */
+.color-swatch.active {
+  box-shadow: 0 0 0 2px #1C1C24, 0 0 0 4px #E2E8F0;
+}
+
+/* Studio shell styles */
+.studio-shell {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+  background: #141419;
+  color: #e2e8f0;
+}

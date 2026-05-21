@@ -193,22 +193,22 @@ export const lightingPresets = {
   // Éclairage Apple Studio - sophistiqué et propre
   appleStudio: {
     ambient: {
-      intensity: 0.4,
+      intensity: 0.1,
       color: "#f0f0f2",
     },
     key: {
       position: [5, 8, 5],
-      intensity: 0.75,
+      intensity: 0.24,
       color: "#fffbe8", // Warmth subtile
     },
     fill: {
       position: [-3, 4, -2],
-      intensity: 0.5,
+      intensity: 0.12,
       color: "#e8f4f8", // Cool accent
     },
     rim: {
       position: [0, 2, -6],
-      intensity: 0.4,
+      intensity: 0.08,
       color: "#b8e0ff", // Blue rim
     },
   },

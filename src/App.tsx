@@ -1,7 +1,19 @@
-import { Suspense, useState, useEffect, useRef } from "react";
+import {
+  Suspense,
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import gsap from "gsap";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Html, useProgress } from "@react-three/drei";
+import {
+  Canvas,
+  useFrame,
+  useThree,
+  type ThreeEvent,
+} from "@react-three/fiber";
+import { useGLTF, Html, useProgress, Environment } from "@react-three/drei";
 import { Leva, useControls } from "leva";
 import * as THREE from "three";
 import {
@@ -10,7 +22,6 @@ import {
   typography,
   lightingPresets,
 } from "@/lib/design-tokens";
-import { useMobile } from "@/lib/responsive";
 
 interface CustomWindow extends Window {
   cassetteScene?: THREE.Group;
@@ -18,16 +29,31 @@ interface CustomWindow extends Window {
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Menu, ChevronUp } from "lucide-react";
+import {
+  X,
+  Menu,
+  Settings,
+  Play,
+  Pen,
+  Disc,
+  Box,
+  LogOut,
+  ArrowLeftRight,
+  ZoomIn,
+  ShoppingCart,
+} from "lucide-react";
 
 // Type Definitions
+type ViewMode = "tilted" | "flat";
+type ShellFinish = "matte" | "chrome";
+
 interface CassetteProps {
   stickerColor: string;
   scale: number;
   texture?: string | null;
   cassetteColor: string;
+  shellFinish: ShellFinish;
   labelRotation: number;
   labelOffsetX: number;
   labelOffsetY: number;
@@ -35,6 +61,8 @@ interface CassetteProps {
   labelScaleY: number;
   labelMirrorX: boolean;
   labelMirrorY: boolean;
+  viewMode: ViewMode;
+  flipCount?: number;
 }
 
 interface CameraLightboxProps {
@@ -44,10 +72,13 @@ interface CameraLightboxProps {
 }
 
 interface SidebarProps {
+  activeTab: "shell" | "label" | "tape" | "packaging";
   stickerColor: string;
   setStickerColor: (color: string) => void;
   cassetteColor: string;
   setCassetteColor: (color: string) => void;
+  shellFinish: ShellFinish;
+  setShellFinish: (finish: ShellFinish) => void;
   cassetteTexture: string | null;
   setCassetteTexture: (texture: string | null) => void;
 }
@@ -146,12 +177,19 @@ const DynamicLighting = ({
         castShadow={false}
       />
 
+      <directionalLight
+        position={[0, 1.2, -8]}
+        intensity={0.08}
+        color="#8b5cf6"
+        castShadow={false}
+      />
+
       {/* Spot Light - Accent */}
       <spotLight
         position={[0, 5, 5]}
         angle={Math.PI / 6}
         penumbra={0.3}
-        intensity={1}
+        intensity={0.18}
         color="#fffaf0"
         castShadow={false}
         target-position={[0, 0, 0]}
@@ -216,10 +254,10 @@ const Environment3D = () => {
       float gradientFactor = (vWorldPosition.y + 25.0) / 50.0;
       gradientFactor = clamp(gradientFactor, 0.0, 1.0);
       
-      // Design System Colors - Clean & Modern
-      vec3 topColor = vec3(0.973, 0.973, 0.976);    // Light gray
-      vec3 middleColor = vec3(0.988, 0.992, 0.992); // Almost white
-      vec3 bottomColor = vec3(0.953, 0.976, 0.984); // Subtle sky tint
+      // Dark premium background with violet halo
+      vec3 topColor = vec3(0.082, 0.082, 0.098);      // #151419
+      vec3 middleColor = vec3(0.074, 0.075, 0.090);   // #131318
+      vec3 bottomColor = vec3(0.051, 0.051, 0.063);   // near black
       
       // Main gradient
       vec3 baseGradient;
@@ -230,13 +268,18 @@ const Environment3D = () => {
         float t = gradientFactor / 0.6;
         baseGradient = mix(bottomColor, middleColor, pow(t, 0.8));
       }
+
+      // Violet halo around the center of the scene
+      float radial = length(vWorldPosition.xz) * 0.08;
+      float halo = exp(-pow(radial, 1.7) * 8.0);
+      vec3 haloColor = vec3(0.545, 0.361, 0.961) * halo * 0.18;
       
       // Subtle noise variations
       vec2 noiseUV = vUv * 4.0 + uTime * 0.005;
       float noise1 = snoise(noiseUV) * 0.002;
       float noise2 = snoise(noiseUV * 2.5 - uTime * 0.004) * 0.0015;
       
-      vec3 finalColor = baseGradient + noise1 + noise2;
+      vec3 finalColor = baseGradient + haloColor + noise1 + noise2;
       
       // Horizontal variation
       float horizontalVar = sin(vWorldPosition.x * 0.1) * cos(vWorldPosition.z * 0.1) * 0.005;
@@ -308,6 +351,285 @@ const FloatingParticles = () => {
   );
 };
 
+const CassetteHalo = () => {
+  const haloTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const baseGradient = ctx.createRadialGradient(256, 270, 18, 256, 270, 240);
+    baseGradient.addColorStop(0, "rgba(139, 92, 246, 0.55)");
+    baseGradient.addColorStop(0.28, "rgba(139, 92, 246, 0.28)");
+    baseGradient.addColorStop(0.58, "rgba(139, 92, 246, 0.10)");
+    baseGradient.addColorStop(1, "rgba(139, 92, 246, 0)");
+
+    const innerGlow = ctx.createRadialGradient(256, 256, 0, 256, 256, 130);
+    innerGlow.addColorStop(0, "rgba(196, 181, 253, 0.22)");
+    innerGlow.addColorStop(0.45, "rgba(139, 92, 246, 0.12)");
+    innerGlow.addColorStop(1, "rgba(139, 92, 246, 0)");
+
+    ctx.fillStyle = baseGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = innerGlow;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  if (!haloTexture) {
+    return null;
+  }
+
+  return (
+    <mesh position={[0, 0, -1.7]} scale={[6.8, 4.2, 1]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial
+        map={haloTexture}
+        transparent
+        opacity={0.85}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+};
+
+const CassetteRig = ({
+  stickerColor,
+  scale,
+  texture,
+  cassetteColor,
+  shellFinish,
+  labelRotation,
+  labelOffsetX,
+  labelOffsetY,
+  labelScaleX,
+  labelScaleY,
+  labelMirrorX,
+  labelMirrorY,
+  viewMode,
+  flipCount = 0,
+}: CassetteProps) => {
+  const rigRef = useRef<THREE.Group>(null);
+  const draggingRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+  const rotationTargetRef = useRef({ x: 0.02, y: 0.35, z: 0 });
+  const rotationCurrentRef = useRef({ x: 0.02, y: 0.35, z: 0 });
+  const previousFlipCountRef = useRef(flipCount);
+  const rigYOffsetTargetRef = useRef(viewMode === "flat" ? 0.14 : 0.08);
+  const rigYOffsetCurrentRef = useRef(rigYOffsetTargetRef.current);
+
+  useEffect(() => {
+    const nextRotation =
+      viewMode === "flat"
+        ? { x: 0.0, y: 0.0, z: -Math.PI / 2 }
+        : { x: 0.02, y: 0.35, z: 0 };
+    const nextYOffset = viewMode === "flat" ? 0.14 : 0.08;
+
+    gsap.to(rotationTargetRef.current, {
+      x: nextRotation.x,
+      y: nextRotation.y,
+      z: nextRotation.z,
+      duration: 1.2,
+      ease: "power3.inOut",
+    });
+
+    gsap.to(rigYOffsetTargetRef, {
+      current: nextYOffset,
+      duration: 1.2,
+      ease: "power3.inOut",
+    });
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (previousFlipCountRef.current === flipCount) {
+      return;
+    }
+
+    previousFlipCountRef.current = flipCount;
+
+    const nextRotation = {
+      x: rotationTargetRef.current.x,
+      y: rotationTargetRef.current.y + Math.PI,
+      z: rotationTargetRef.current.z,
+    };
+
+    gsap.to(rotationTargetRef.current, {
+      x: nextRotation.x,
+      y: nextRotation.y,
+      z: nextRotation.z,
+      duration: 1.2,
+      ease: "power3.inOut",
+    });
+  }, [flipCount]);
+
+  const handleWindowPointerMove = useCallback((event: PointerEvent) => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    const deltaX = event.clientX - lastPointerRef.current.x;
+    const deltaY = event.clientY - lastPointerRef.current.y;
+
+    lastPointerRef.current = { x: event.clientX, y: event.clientY };
+
+    rotationTargetRef.current.y += deltaX * 0.008;
+    rotationTargetRef.current.x = THREE.MathUtils.clamp(
+      rotationTargetRef.current.x + deltaY * 0.006,
+      -0.28,
+      0.28,
+    );
+  }, []);
+
+  const stopDragging = useCallback(() => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    draggingRef.current = false;
+    window.removeEventListener("pointermove", handleWindowPointerMove);
+    window.removeEventListener("pointerup", stopDragging);
+    window.removeEventListener("pointercancel", stopDragging);
+  }, [handleWindowPointerMove]);
+
+  useFrame((state, delta) => {
+    if (!rigRef.current) {
+      return;
+    }
+
+    void state;
+
+    const smoothing = 1 - Math.exp(-8 * delta);
+
+    rotationCurrentRef.current.x = THREE.MathUtils.lerp(
+      rotationCurrentRef.current.x,
+      rotationTargetRef.current.x,
+      smoothing,
+    );
+    rotationCurrentRef.current.y = THREE.MathUtils.lerp(
+      rotationCurrentRef.current.y,
+      rotationTargetRef.current.y,
+      smoothing,
+    );
+    rotationCurrentRef.current.z = THREE.MathUtils.lerp(
+      rotationCurrentRef.current.z,
+      rotationTargetRef.current.z,
+      smoothing,
+    );
+
+    rigYOffsetCurrentRef.current = THREE.MathUtils.lerp(
+      rigYOffsetCurrentRef.current,
+      rigYOffsetTargetRef.current,
+      smoothing,
+    );
+
+    rigRef.current.rotation.x = rotationCurrentRef.current.x;
+    rigRef.current.rotation.y = rotationCurrentRef.current.y;
+    rigRef.current.rotation.z = rotationCurrentRef.current.z;
+    rigRef.current.position.y = rigYOffsetCurrentRef.current;
+  });
+
+  useEffect(() => {
+    return () => {
+      stopDragging();
+    };
+  }, [stopDragging]);
+
+  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+    draggingRef.current = true;
+    lastPointerRef.current = { x: event.clientX, y: event.clientY };
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", stopDragging);
+    window.addEventListener("pointercancel", stopDragging);
+  };
+
+  return (
+    <>
+      <SceneDragSurface
+        onDragStart={handlePointerDown}
+        onDragEnd={stopDragging}
+      />
+      <group ref={rigRef} position={[0, rigYOffsetCurrentRef.current, 0]}>
+        <Cassette
+          stickerColor={stickerColor}
+          scale={scale}
+          texture={texture}
+          cassetteColor={cassetteColor}
+          shellFinish={shellFinish}
+          labelRotation={labelRotation}
+          labelOffsetX={labelOffsetX}
+          labelOffsetY={labelOffsetY}
+          labelScaleX={labelScaleX}
+          labelScaleY={labelScaleY}
+          labelMirrorX={labelMirrorX}
+          labelMirrorY={labelMirrorY}
+          viewMode={viewMode}
+        />
+      </group>
+    </>
+  );
+};
+
+const SceneDragSurface = ({
+  onDragStart,
+  onDragEnd,
+}: {
+  onDragStart: (event: ThreeEvent<PointerEvent>) => void;
+  onDragEnd: () => void;
+}) => {
+  return (
+    <mesh
+      position={[0, 0, 0]}
+      onPointerDown={onDragStart}
+      onPointerUp={onDragEnd}
+      onPointerCancel={onDragEnd}
+    >
+      <planeGeometry args={[40, 40]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+  );
+};
+
+const ResponsiveCamera = ({ isZoomed = false }: { isZoomed?: boolean }) => {
+  const { camera, size } = useThree();
+
+  useEffect(() => {
+    const shortestSide = Math.min(size.width, size.height);
+    let distance =
+      shortestSide < 360
+        ? 5.05
+        : shortestSide < 520
+          ? 4.65
+          : shortestSide < 760
+            ? 4.1
+            : 3.6;
+
+    if (isZoomed) {
+      distance -= 1.0;
+    }
+
+    distance -= 0.25;
+
+    gsap.to(camera.position, {
+      z: distance,
+      duration: 1.2,
+      ease: "power3.inOut",
+      onUpdate: () => camera.updateProjectionMatrix(),
+    });
+  }, [camera, size.width, size.height, isZoomed]);
+
+  return null;
+};
+
 // Ombre diffuse améliorée
 
 function Cassette({
@@ -315,6 +637,7 @@ function Cassette({
   scale,
   texture,
   cassetteColor,
+  shellFinish,
   labelRotation,
   labelOffsetX,
   labelOffsetY,
@@ -334,6 +657,7 @@ function Cassette({
   } | null>(null);
   const [isTransparent, setIsTransparent] = useState(false);
   const originalImageRef = useRef<HTMLImageElement | null>(null);
+  const originalShellMaterialRef = useRef<THREE.MeshStandardMaterial | null>(null);
 
   // Contrôles Leva pour le matériau de transmission
   const materialProps = useControls("Transmission Material", {
@@ -354,6 +678,29 @@ function Cassette({
   // Exposer la scène pour l'extraction de la texture
   useEffect(() => {
     (window as CustomWindow).cassetteScene = scene;
+  }, [scene]);
+
+  useEffect(() => {
+    if (originalShellMaterialRef.current) {
+      return;
+    }
+
+    const shellMesh = scene.getObjectByName("Object_4") as THREE.Mesh | null;
+    if (!shellMesh?.isMesh) {
+      return;
+    }
+
+    const shellMaterial = shellMesh.material;
+    if (
+      shellMaterial instanceof THREE.MeshStandardMaterial ||
+      shellMaterial instanceof THREE.MeshPhysicalMaterial
+    ) {
+      originalShellMaterialRef.current = shellMaterial.clone();
+
+      if (!originalImageRef.current && shellMaterial.map?.image) {
+        originalImageRef.current = shellMaterial.map.image as HTMLImageElement;
+      }
+    }
   }, [scene]);
 
   useEffect(() => {
@@ -569,6 +916,9 @@ function Cassette({
           }
           // Object_4: Seul shell coloré avec la couleur sélectionnée
           else if (mesh.name === "Object_4") {
+            const colorValue =
+              cassetteColor === "transparent" ? "#ffffff" : cassetteColor;
+
             if (isTransparent) {
               mesh.material = new THREE.MeshPhysicalMaterial({
                 ...materialProps,
@@ -581,27 +931,99 @@ function Cassette({
                 color: "#ffffff",
                 side: THREE.DoubleSide,
               });
-            } else {
-              // Garder le matériau original avec sa texture
-              mesh.material = material.clone();
-              const newMaterial = mesh.material as THREE.MeshStandardMaterial;
+            } else if (shellFinish === "chrome") {
+              const sourceMaterial = originalShellMaterialRef.current ?? material;
 
-              const colorValue =
-                cassetteColor === "transparent" ? "#ffffff" : cassetteColor;
-              newMaterial.roughness = 0.4;
-              newMaterial.metalness = 0.2;
-              newMaterial.normalScale = new THREE.Vector2(0.2, 0.2);
+              // Dark mirrored plastic look: reflective and cheap-looking, not pure metal.
+              const chromeMaterial = new THREE.MeshPhysicalMaterial({
+                // Keep the albedo bright so the mask pattern remains readable,
+                // while reflections + roughness create the dark cheap mirror feel.
+                color: new THREE.Color("#d6d6da"),
+                metalness: 0.38,
+                roughness: 0.16,
+                clearcoat: 1,
+                clearcoatRoughness: 0.06,
+                envMapIntensity: 0.72,
+                ior: 1.5,
+                reflectivity: 1,
+                side: THREE.DoubleSide,
+              });
 
-              // Si une texture map est présente, créer une texture modifiée avec le masque noir
-              if (newMaterial.map && newMaterial.map.image) {
-                // On sauvegarde l'image d'origine au premier passage
-                if (!originalImageRef.current) {
-                  originalImageRef.current = newMaterial.map
-                    .image as HTMLImageElement;
+              if (!originalImageRef.current && sourceMaterial.map?.image) {
+                originalImageRef.current = sourceMaterial.map.image as HTMLImageElement;
+              }
+
+              const sourceImage = originalImageRef.current;
+              if (sourceImage) {
+                const canvas = document.createElement("canvas");
+                canvas.width = sourceImage.width;
+                canvas.height = sourceImage.height;
+
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                  ctx.drawImage(sourceImage, 0, 0);
+
+                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const data = imageData.data;
+
+                  const tempColor = new THREE.Color(colorValue);
+                  const r = Math.round(tempColor.r * 255);
+                  const g = Math.round(tempColor.g * 255);
+                  const b = Math.round(tempColor.b * 255);
+
+                  for (let i = 0; i < data.length; i += 4) {
+                    const pixelR = data[i];
+                    const pixelG = data[i + 1];
+                    const pixelB = data[i + 2];
+
+                    if (pixelR < 50 && pixelG < 50 && pixelB < 50) {
+                      data[i] = r;
+                      data[i + 1] = g;
+                      data[i + 2] = b;
+                    }
+                  }
+
+                  ctx.putImageData(imageData, 0, 0);
+
+                  const chromeMaskTexture = new THREE.CanvasTexture(canvas);
+                  chromeMaskTexture.wrapS = THREE.ClampToEdgeWrapping;
+                  chromeMaskTexture.wrapT = THREE.ClampToEdgeWrapping;
+                  chromeMaskTexture.flipY = false;
+                  chromeMaskTexture.colorSpace = THREE.SRGBColorSpace;
+                  chromeMaskTexture.needsUpdate = true;
+                  chromeMaterial.map = chromeMaskTexture;
                 }
+              }
 
-                // On utilise toujours notre sauvegarde comme source de vérité
-                const sourceImage = originalImageRef.current;
+              chromeMaterial.normalMap = sourceMaterial.normalMap ?? null;
+              chromeMaterial.normalScale = new THREE.Vector2(0.012, 0.012);
+              chromeMaterial.emissive = new THREE.Color("#000000");
+              chromeMaterial.emissiveIntensity = 0;
+              chromeMaterial.needsUpdate = true;
+
+              mesh.material = chromeMaterial;
+            } else {
+              const sourceMaterial = originalShellMaterialRef.current ?? material;
+
+              // Garder le matériau original avec sa texture
+              mesh.material = sourceMaterial.clone();
+              const newMaterial = mesh.material as THREE.MeshStandardMaterial;
+              // Conserver les paramètres matière d'origine (roughness, normalMap, etc.)
+              // et ne modifier que le masque de couleur.
+              newMaterial.color = new THREE.Color("#ffffff");
+              newMaterial.envMapIntensity = Math.min(
+                newMaterial.envMapIntensity ?? 1,
+                0.04,
+              );
+
+              // Rebuild the matte mask from the original source image so it
+              // remains available even after switching from chrome mode.
+              if (!originalImageRef.current && material.map?.image) {
+                originalImageRef.current = material.map.image as HTMLImageElement;
+              }
+
+              const sourceImage = originalImageRef.current;
+              if (sourceImage) {
 
                 const canvas = document.createElement("canvas");
                 canvas.width = sourceImage.width;
@@ -650,9 +1072,13 @@ function Cassette({
                   newTexture.wrapS = THREE.ClampToEdgeWrapping;
                   newTexture.wrapT = THREE.ClampToEdgeWrapping;
                   newTexture.flipY = false;
+                  newTexture.colorSpace = THREE.SRGBColorSpace;
 
                   newMaterial.map = newTexture;
                 }
+              } else {
+                // Fallback: if no mask source is available, still apply selected color.
+                newMaterial.color = new THREE.Color(colorValue);
               }
 
               newMaterial.needsUpdate = true;
@@ -660,18 +1086,22 @@ function Cassette({
           }
           // Sticker: Appliquer la texture ou stickerColor
           else if (mesh.name === "Sticker") {
-            mesh.material = material.clone();
-            const newMaterial = mesh.material as THREE.MeshStandardMaterial;
+            const newMaterial = new THREE.MeshStandardMaterial({
+              map: textureMap ?? null,
+              color: textureMap ? new THREE.Color("#b0b0b0") : new THREE.Color(stickerColor),
+              roughness: 1,
+              metalness: 0,
+              envMapIntensity: 0,
+              side: THREE.FrontSide,
+            });
             if (textureMap) {
-              newMaterial.map = textureMap;
-              newMaterial.color = new THREE.Color("#ffffff");
               newMaterial.onBeforeCompile = () => {};
             } else {
-              newMaterial.map = null;
-              newMaterial.color = new THREE.Color(stickerColor);
               newMaterial.onBeforeCompile = () => {};
             }
-            newMaterial.side = THREE.FrontSide;
+            newMaterial.emissive = new THREE.Color("#000000");
+            newMaterial.emissiveIntensity = 0;
+            mesh.material = newMaterial;
             newMaterial.needsUpdate = true;
           }
           // Autres meshes: Ne pas les colorer, garder leur apparence d'origine
@@ -684,6 +1114,7 @@ function Cassette({
     nodes,
     textureMap,
     cassetteColor,
+    shellFinish,
     isTransparent,
     materialProps,
     scene,
@@ -701,8 +1132,8 @@ function Cassette({
     <group
       scale={[scale, scale, scale]}
       rotation={[
-        THREE.MathUtils.degToRad(80),
-        THREE.MathUtils.degToRad(80),
+        THREE.MathUtils.degToRad(90),
+        THREE.MathUtils.degToRad(90),
         THREE.MathUtils.degToRad(0),
       ]}
     >
@@ -765,421 +1196,404 @@ const appleLighting = lightingPresets.appleStudio;
 
 // Sidebar Content Component (used by both desktop and mobile)
 const SidebarContent = ({
+  activeTab,
   stickerColor,
   setStickerColor,
   cassetteColor,
   setCassetteColor,
+  shellFinish,
+  setShellFinish,
   cassetteTexture,
   textureInputRef,
-  calculatePrice,
   handleTextureUpload,
   removeTexture,
   extractStickerTexture,
   downloadBaseTexture,
   isMobile,
 }: SidebarProps & {
+  activeTab: "shell" | "label" | "tape" | "packaging";
   textureInputRef: React.RefObject<HTMLInputElement>;
-  calculatePrice: () => number;
   handleTextureUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   removeTexture: () => void;
   extractStickerTexture: () => void;
   downloadBaseTexture: () => Promise<void>;
   isMobile?: boolean;
 }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const contentElement = contentRef.current;
+    const titleElement = titleRef.current;
+
+    if (!contentElement || !titleElement) {
+      return;
+    }
+
+    gsap.killTweensOf([contentElement, titleElement]);
+
+    const timeline = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+    timeline.fromTo(
+      titleElement,
+      { autoAlpha: 0, y: 8, scale: 0.98 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.28 },
+    );
+
+    timeline.fromTo(
+      contentElement,
+      { autoAlpha: 0, y: 16, scale: 0.985 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.42 },
+      "-=0.08",
+    );
+
+    return () => {
+      timeline.kill();
+    };
+  }, [activeTab, isMobile]);
+
   const colorPresets = [
     { color: colors.inkDeep, label: "Black" },
     { color: colors.canvas, label: "White" },
+    { color: "#f5f5f5", label: "Pearl" },
+    { color: "#d4d4d8", label: "Mist" },
+    { color: "#a1a1aa", label: "Stone" },
+    { color: "#52525b", label: "Graphite" },
     { color: colors.brandPink, label: "Pink" },
+    { color: "#ec4899", label: "Magenta" },
+    { color: "#db2777", label: "Fuchsia" },
     { color: colors.brandOrange, label: "Orange" },
+    { color: "#f97316", label: "Tangerine" },
+    { color: "#ea580c", label: "Burnt Orange" },
+    { color: "#facc15", label: "Gold" },
     { color: colors.brandGreen, label: "Green" },
+    { color: "#22c55e", label: "Lime" },
+    { color: "#15803d", label: "Forest" },
     { color: colors.brandTeal, label: "Teal" },
+    { color: "#0d9488", label: "Turquoise" },
+    { color: "#0891b2", label: "Cyan" },
+    { color: "#38bdf8", label: "Sky" },
+    { color: "#2563eb", label: "Blue" },
+    { color: "#1d4ed8", label: "Royal Blue" },
     { color: colors.primary, label: "Purple" },
+    { color: "#7c3aed", label: "Violet" },
+    { color: "#4c1d95", label: "Deep Purple" },
     { color: colors.charcoal, label: "Charcoal" },
     { color: colors.cardTintYellowBold, label: "Yellow" },
     { color: colors.brandBrown, label: "Brown" },
+    { color: "#7f1d1d", label: "Bordeaux" },
+    { color: "#be123c", label: "Ruby" },
     { color: "#e8e8e8", label: "Gray" },
     { color: "transparent", label: "Clear" },
   ];
 
   return (
-    <div className={isMobile ? "space-y-6" : "space-y-8"}>
-      {/* Cassette Color Section */}
-      <section className="space-y-4">
-        <div
-          style={{
-            fontSize: typography.sizes.bodySmMedium.fontSize,
-            fontWeight: 600,
-            color: colors.ink,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Cassette Shell
-        </div>
-
-        <div
-          className={
-            isMobile ? "grid grid-cols-5 gap-2" : "grid grid-cols-6 gap-2"
-          }
-        >
-          {colorPresets.map((preset) => (
-            <button
-              key={preset.color}
-              onClick={() => setCassetteColor(preset.color)}
-              className="transition-all duration-200 hover:scale-110 relative"
+    <div
+      className={isMobile ? "space-y-6" : "space-y-8"}
+      style={{ color: colors.onDark }}
+    >
+      <div ref={titleRef}>
+        {activeTab === "shell" ? (
+          <section className="space-y-4">
+            <div
               style={{
-                width: isMobile ? "36px" : "40px",
-                height: isMobile ? "36px" : "40px",
-                borderRadius: borderRadius.md,
-                backgroundColor:
-                  preset.color === "transparent"
-                    ? colors.cardTintSky
-                    : preset.color,
-                border: `2px solid ${cassetteColor === preset.color ? colors.primary : colors.hairline}`,
-                boxShadow:
-                  cassetteColor === preset.color
-                    ? `0 0 0 2px ${colors.canvas}, 0 0 8px ${colors.primary}40`
-                    : "none",
-                cursor: "pointer",
+                fontSize: typography.sizes.bodySmMedium.fontSize,
+                fontWeight: 600,
+                color: colors.onDark,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
-              title={preset.label}
             >
-              {preset.color === "transparent" && (
-                <span
+              Cassette Shell
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "matte" as const, label: "Matte" },
+                { id: "chrome" as const, label: "Chrome" },
+              ].map((finish) => {
+                const active = shellFinish === finish.id;
+                return (
+                  <button
+                    key={finish.id}
+                    type="button"
+                    onClick={() => setShellFinish(finish.id)}
+                    className="rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors"
+                    style={{
+                      border: `1px solid ${active ? colors.primary : colors.hairline}`,
+                      backgroundColor: active
+                        ? "rgba(124, 58, 237, 0.2)"
+                        : colors.brandNavyDeep,
+                      color: active ? colors.onDark : colors.onDarkMuted,
+                    }}
+                  >
+                    {finish.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className={
+                isMobile ? "grid grid-cols-5 gap-2" : "grid grid-cols-6 gap-2"
+              }
+            >
+              {colorPresets.map((preset) => (
+                <button
+                  key={preset.color}
+                  onClick={() => setCassetteColor(preset.color)}
+                  className="transition-all duration-200 hover:scale-110 relative"
                   style={{
-                    fontSize: "9px",
-                    fontWeight: 700,
-                    color: colors.primary,
+                    width: isMobile ? "36px" : "40px",
+                    height: isMobile ? "36px" : "40px",
+                    borderRadius: borderRadius.md,
+                    backgroundColor:
+                      preset.color === "transparent"
+                        ? colors.cardTintSky
+                        : preset.color,
+                    border: `2px solid ${cassetteColor === preset.color ? colors.primary : colors.hairline}`,
+                    boxShadow:
+                      cassetteColor === preset.color
+                        ? `0 0 0 2px ${colors.canvas}, 0 0 8px ${colors.primary}40`
+                        : "none",
+                    cursor: "pointer",
+                  }}
+                  title={preset.label}
+                >
+                  {preset.color === "transparent" && (
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        color: colors.primary,
+                      }}
+                    >
+                      T
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div
+              style={{
+                fontSize: "11px",
+                color: colors.onDarkMuted,
+                textTransform: "uppercase",
+                letterSpacing: "0.4px",
+              }}
+            >
+              30 couleurs disponibles
+            </div>
+          </section>
+        ) : activeTab === "label" ? (
+          <section className="space-y-4">
+            <div
+              style={{
+                fontSize: typography.sizes.bodySmMedium.fontSize,
+                fontWeight: 600,
+                color: colors.onDark,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Label Design
+            </div>
+
+            {!cassetteTexture ? (
+              <div className="space-y-3">
+                <div>
+                  <Label
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: colors.onDarkMuted,
+                      textTransform: "uppercase",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Label Color
+                  </Label>
+                  <div
+                    className={
+                      isMobile
+                        ? "grid grid-cols-6 gap-1"
+                        : "grid grid-cols-8 gap-1.5"
+                    }
+                  >
+                    {colorPresets.slice(0, 8).map((preset) => (
+                      <button
+                        key={preset.color}
+                        onClick={() => setStickerColor(preset.color)}
+                        className="transition-all"
+                        style={{
+                          width: isMobile ? "24px" : "28px",
+                          height: isMobile ? "24px" : "28px",
+                          borderRadius: borderRadius.sm,
+                          backgroundColor:
+                            preset.color === "transparent"
+                              ? colors.cardTintSky
+                              : preset.color,
+                          border:
+                            stickerColor === preset.color
+                              ? `2px solid ${colors.primary}`
+                              : `1px solid ${colors.hairline}`,
+                          cursor: "pointer",
+                          boxShadow:
+                            stickerColor === preset.color
+                              ? `0 0 0 1px ${colors.canvas}, 0 0 6px ${colors.primary}40`
+                              : "none",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() => textureInputRef.current?.click()}
+                  className="w-full"
+                  style={{
+                    borderStyle: "dashed",
+                    borderWidth: "2px",
+                    borderColor: colors.hairline,
+                    backgroundColor: colors.brandNavyMid,
+                    color: colors.onDarkMuted,
+                    padding: isMobile ? "16px" : "20px",
+                    borderRadius: borderRadius.md,
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
                   }}
                 >
-                  T
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom Color Input */}
-        <div className="space-y-2">
-          <div style={{ display: "flex", gap: "8px" }}>
-            <div
-              style={{
-                width: isMobile ? "40px" : "48px",
-                height: isMobile ? "40px" : "48px",
-                borderRadius: borderRadius.md,
-                backgroundColor:
-                  cassetteColor === "transparent"
-                    ? colors.cardTintSky
-                    : cassetteColor,
-                border: `1px solid ${colors.hairline}`,
-                flexShrink: 0,
-              }}
-            />
-            <Input
-              type="text"
-              value={cassetteColor}
-              onChange={(e) => setCassetteColor(e.target.value)}
-              className="flex-1"
-              placeholder="#HEX"
-              style={{
-                fontSize: "12px",
-                fontFamily: "monospace",
-                padding: "8px 12px",
-                borderRadius: borderRadius.md,
-                border: `1px solid ${colors.hairline}`,
-                color: colors.ink,
-              }}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Label Section */}
-      <section className="space-y-4">
-        <div
-          style={{
-            fontSize: typography.sizes.bodySmMedium.fontSize,
-            fontWeight: 600,
-            color: colors.ink,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          Label Design
-        </div>
-
-        {!cassetteTexture ? (
-          <div className="space-y-3">
-            {/* Color Picker for Label */}
-            <div>
-              <Label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: colors.slate,
-                  textTransform: "uppercase",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                Label Color
-              </Label>
-              <div
-                className={
-                  isMobile
-                    ? "grid grid-cols-6 gap-1"
-                    : "grid grid-cols-8 gap-1.5"
-                }
-              >
-                {colorPresets.slice(0, 8).map((preset) => (
-                  <button
-                    key={preset.color}
-                    onClick={() => setStickerColor(preset.color)}
-                    className="transition-all"
-                    style={{
-                      width: isMobile ? "24px" : "28px",
-                      height: isMobile ? "24px" : "28px",
-                      borderRadius: borderRadius.sm,
-                      backgroundColor:
-                        preset.color === "transparent"
-                          ? colors.cardTintSky
-                          : preset.color,
-                      border:
-                        stickerColor === preset.color
-                          ? `2px solid ${colors.primary}`
-                          : `1px solid ${colors.hairline}`,
-                      cursor: "pointer",
-                      boxShadow:
-                        stickerColor === preset.color
-                          ? `0 0 0 1px ${colors.canvas}, 0 0 6px ${colors.primary}40`
-                          : "none",
-                    }}
+                  <div className="text-center">
+                    <div style={{ fontSize: "18px", marginBottom: "4px" }}>↑</div>
+                    <p>Upload Label</p>
+                  </div>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div
+                  style={{
+                    position: "relative",
+                    height: isMobile ? "60px" : "80px",
+                    borderRadius: borderRadius.lg,
+                    border: `1px solid ${colors.hairline}`,
+                    overflow: "hidden",
+                    backgroundColor: colors.brandNavyMid,
+                  }}
+                >
+                  <img
+                    src={cassetteTexture}
+                    alt="Label"
+                    className="w-full h-full object-contain"
+                    style={{ aspectRatio: "3.5 / 1.6562" }}
                   />
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {/* Upload Button */}
-            <Button
-              variant="outline"
-              onClick={() => textureInputRef.current?.click()}
-              className="w-full"
-              style={{
-                borderStyle: "dashed",
-                borderWidth: "2px",
-                borderColor: colors.hairlineStrong,
-                backgroundColor: colors.surface,
-                color: colors.charcoal,
-                padding: isMobile ? "16px" : "20px",
-                borderRadius: borderRadius.md,
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-            >
-              <div className="text-center">
-                <div style={{ fontSize: "18px", marginBottom: "4px" }}>↑</div>
-                <p>Upload Label</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => textureInputRef.current?.click()}
+                    style={{
+                      flex: 1,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      borderColor: colors.hairline,
+                      color: colors.onDark,
+                    }}
+                  >
+                    Change
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={removeTexture}
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      borderColor: colors.semanticError,
+                      color: colors.semanticError,
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {/* Texture Preview */}
-            <div
-              style={{
-                position: "relative",
-                height: isMobile ? "60px" : "80px",
-                borderRadius: borderRadius.lg,
-                border: `1px solid ${colors.hairline}`,
-                overflow: "hidden",
-                backgroundColor: colors.surface,
-              }}
-            >
-              <img
-                src={cassetteTexture}
-                alt="Label"
-                className="w-full h-full object-contain"
-                style={{ aspectRatio: "3.5 / 1.6562" }}
-              />
-            </div>
+            )}
 
-            {/* Action Buttons */}
+            <input
+              ref={textureInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleTextureUpload}
+              className="hidden"
+            />
+
             <div className="flex gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => textureInputRef.current?.click()}
+                onClick={extractStickerTexture}
                 style={{
                   flex: 1,
-                  fontSize: "12px",
+                  fontSize: "11px",
                   fontWeight: 600,
                   borderColor: colors.hairline,
-                  color: colors.ink,
+                  color: colors.onDarkMuted,
+                  borderWidth: "1px",
+                  borderRadius: borderRadius.md,
                 }}
               >
-                Change
+                Export
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={removeTexture}
+                onClick={downloadBaseTexture}
                 style={{
-                  fontSize: "12px",
+                  flex: 1,
+                  fontSize: "11px",
                   fontWeight: 600,
-                  borderColor: colors.semanticError,
-                  color: colors.semanticError,
+                  borderColor: colors.hairline,
+                  color: colors.onDarkMuted,
+                  borderWidth: "1px",
+                  borderRadius: borderRadius.md,
                 }}
               >
-                <X className="w-4 h-4" />
+                Template
               </Button>
             </div>
+          </section>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-[#334155] bg-[#252530] px-4 py-6 text-sm text-[#94A3B8]">
+            This section is coming next.
           </div>
         )}
-
-        {/* Utility Buttons */}
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={extractStickerTexture}
-            style={{
-              flex: 1,
-              fontSize: "11px",
-              fontWeight: 600,
-              borderColor: colors.hairline,
-              color: colors.slate,
-              borderWidth: "1px",
-              borderRadius: borderRadius.md,
-            }}
-          >
-            Export
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={downloadBaseTexture}
-            style={{
-              flex: 1,
-              fontSize: "11px",
-              fontWeight: 600,
-              borderColor: colors.hairline,
-              color: colors.slate,
-              borderWidth: "1px",
-              borderRadius: borderRadius.md,
-            }}
-          >
-            Template
-          </Button>
-        </div>
-
-        <input
-          ref={textureInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleTextureUpload}
-          className="hidden"
-        />
-      </section>
-
-      {/* Pricing Section */}
-      <div
-        style={{
-          backgroundColor: colors.surface,
-          padding: "16px",
-          borderRadius: borderRadius.lg,
-          border: `1px solid ${colors.hairline}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "8px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: typography.sizes.bodySmMedium.fontSize,
-              fontWeight: 600,
-              color: colors.slate,
-              textTransform: "uppercase",
-            }}
-          >
-            Total
-          </span>
-          <span
-            style={{
-              fontSize: "20px",
-              fontWeight: 700,
-              color: colors.primary,
-              fontFamily: "monospace",
-            }}
-          >
-            {calculatePrice().toFixed(2)}€
-          </span>
-        </div>
-        <div
-          style={{
-            fontSize: "11px",
-            color: colors.slate,
-            lineHeight: 1.4,
-          }}
-        >
-          Base: 12.90€ {cassetteTexture && "+ Label: 3.00€"}
-        </div>
       </div>
 
-      {/* Add to Cart Button */}
-      <Button
-        className="w-full"
-        style={{
-          backgroundColor: colors.primary,
-          color: colors.onDark,
-          height: isMobile ? "40px" : "44px",
-          fontSize: typography.sizes.buttonMd.fontSize,
-          fontWeight: 700,
-          borderRadius: borderRadius.md,
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-          border: "none",
-          cursor: "pointer",
-          transition: "all 0.2s",
-          boxShadow: `0 0 0 1px ${colors.primary}20`,
-        }}
-      >
-        + Add to Cart
-      </Button>
-
-      {/* Shipping Info */}
-      <p
-        style={{
-          fontSize: "11px",
-          textAlign: "center",
-          color: colors.slate,
-          fontFamily: "monospace",
-        }}
-      >
-        Ships in 3–5 days
-      </p>
+      <div ref={contentRef} />
     </div>
   );
 };
 
 // Modern Production-Ready Desktop Sidebar
 const Sidebar = ({
+  activeTab,
   stickerColor,
   setStickerColor,
   cassetteColor,
   setCassetteColor,
+  shellFinish,
+  setShellFinish,
   cassetteTexture,
   setCassetteTexture,
 }: SidebarProps) => {
   const textureInputRef = useRef<HTMLInputElement>(null);
-
-  const calculatePrice = () => 12.9 + (cassetteTexture ? 3.0 : 0);
 
   const handleTextureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1328,7 +1742,7 @@ const Sidebar = ({
 
   return (
     <div
-      className="hidden lg:fixed lg:flex right-0 top-0 h-full bg-white border-l flex-col z-10"
+      className="flex h-full w-full flex-col bg-[#1C1C24] text-[#E2E8F0]"
       style={{
         width: "320px",
         borderLeftColor: colors.hairline,
@@ -1340,7 +1754,7 @@ const Sidebar = ({
       <div
         className="sticky top-0 p-6 border-b"
         style={{
-          backgroundColor: colors.primary,
+          backgroundColor: colors.brandNavyDeep,
           borderBottomColor: colors.hairline,
           borderBottomWidth: "1px",
           zIndex: 20,
@@ -1365,21 +1779,27 @@ const Sidebar = ({
             margin: "4px 0 0 0",
           }}
         >
-          Studio • Customizer
+          {activeTab === "shell"
+            ? "Shell"
+            : activeTab === "label"
+              ? "Label"
+              : "Studio • Customizer"}
         </p>
       </div>
 
       {/* Content */}
-      <div className="overflow-y-auto flex-1">
+      <div className="overflow-y-auto flex-1 px-6 py-6">
         <SidebarContent
+          activeTab={activeTab}
           stickerColor={stickerColor}
           setStickerColor={setStickerColor}
           cassetteColor={cassetteColor}
           setCassetteColor={setCassetteColor}
+          shellFinish={shellFinish}
+          setShellFinish={setShellFinish}
           cassetteTexture={cassetteTexture}
           setCassetteTexture={setCassetteTexture}
           textureInputRef={textureInputRef}
-          calculatePrice={calculatePrice}
           handleTextureUpload={handleTextureUpload}
           removeTexture={removeTexture}
           extractStickerTexture={extractStickerTexture}
@@ -1391,293 +1811,26 @@ const Sidebar = ({
   );
 };
 
-// Mobile Sidebar Bottom Sheet
-const MobileSidebar = ({
-  stickerColor,
-  setStickerColor,
-  cassetteColor,
-  setCassetteColor,
-  cassetteTexture,
-  setCassetteTexture,
-  isOpen,
-  onClose,
-}: SidebarProps & { isOpen: boolean; onClose: () => void }) => {
-  const textureInputRef = useRef<HTMLInputElement>(null);
-
-  const calculatePrice = () => 12.9 + (cassetteTexture ? 3.0 : 0);
-
-  const handleTextureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) {
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setCassetteTexture(result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removeTexture = () => {
-    setCassetteTexture(null);
-    if (textureInputRef.current) {
-      textureInputRef.current.value = "";
-    }
-  };
-
-  const extractStickerTexture = () => {
-    try {
-      const scene = (window as CustomWindow).cassetteScene;
-      if (!scene) {
-        throw new Error("3D scene not available");
-      }
-
-      let stickerMesh: THREE.Mesh | null = null;
-      scene.traverse((child: THREE.Object3D) => {
-        if (child.name === "Sticker" && (child as THREE.Mesh).isMesh) {
-          stickerMesh = child as THREE.Mesh;
-        }
-      });
-
-      if (!stickerMesh || !(stickerMesh as THREE.Mesh).material) {
-        throw new Error("Sticker mesh not found");
-      }
-
-      const material = (stickerMesh as THREE.Mesh)
-        .material as THREE.MeshStandardMaterial;
-      if (!material.map || !material.map.image) {
-        throw new Error("No texture found on sticker");
-      }
-
-      const img = material.map.image as HTMLImageElement;
-      const width = img.width || 512;
-      const height = img.height || 512;
-      const canvas = document.createElement("canvas");
-      const renderer = new THREE.WebGLRenderer({
-        canvas,
-        preserveDrawingBuffer: true,
-      });
-
-      canvas.width = width;
-      canvas.height = height;
-      renderer.setSize(width, height);
-
-      const tempScene = new THREE.Scene();
-      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-      const geometry = new THREE.PlaneGeometry(2, 2);
-      const tempMaterial = new THREE.MeshBasicMaterial({ map: material.map });
-      tempScene.add(new THREE.Mesh(geometry, tempMaterial));
-
-      renderer.render(tempScene, camera);
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "sticker-texture.png";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
-
-        renderer.dispose();
-        geometry.dispose();
-        tempMaterial.dispose();
-      }, "image/png");
-    } catch (error) {
-      console.error("Error extracting texture:", error);
-      downloadBaseTexture();
-    }
-  };
-
-  const downloadBaseTexture = async () => {
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = 3500;
-      canvas.height = 1656;
-      const ctx = canvas.getContext("2d");
-      const scaleX = canvas.width / 512;
-      const scaleY = canvas.height / 256;
-      const sx = (value: number) => value * scaleX;
-      const sy = (value: number) => value * scaleY;
-
-      if (!ctx) {
-        return;
-      }
-
-      ctx.fillStyle = colors.canvas;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = colors.hairline;
-      ctx.lineWidth = Math.max(2, Math.round(scaleX));
-      ctx.strokeRect(sx(5), sy(5), sx(502), sy(246));
-
-      ctx.fillStyle = colors.surface;
-      ctx.beginPath();
-      ctx.roundRect(sx(30), sy(40), sx(452), sy(60), Math.max(8, sx(8)));
-      ctx.fill();
-
-      ctx.fillStyle = colors.charcoal;
-      ctx.font = `bold ${Math.max(24, Math.round(24 * scaleY))}px ${typography.fontFamily.primary}`;
-      ctx.textAlign = "center";
-      ctx.fillText("ALBUM TITLE", sx(256), sy(75));
-
-      ctx.fillStyle = colors.surface;
-      ctx.beginPath();
-      ctx.roundRect(sx(30), sy(120), sx(452), sy(40), Math.max(6, sx(6)));
-      ctx.fill();
-
-      ctx.fillStyle = colors.slate;
-      ctx.font = `${Math.max(18, Math.round(18 * scaleY))}px ${typography.fontFamily.primary}`;
-      ctx.fillText("Artist Name", sx(256), sy(145));
-
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "cassette-template.png";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, "image/png");
-    } catch (error) {
-      console.error("Error generating template:", error);
-    }
-  };
-
-  return (
-    <>
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          onClick={onClose}
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            zIndex: 30,
-            animation: "fadeIn 0.2s ease-out",
-          }}
-        />
-      )}
-
-      {/* Bottom Sheet */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: colors.canvas,
-          borderTopLeftRadius: borderRadius.lg,
-          borderTopRightRadius: borderRadius.lg,
-          boxShadow: `0 -4px 12px rgba(0, 0, 0, 0.1)`,
-          zIndex: 40,
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          transform: isOpen ? "translateY(0)" : "translateY(100%)",
-          transition: "transform 0.3s ease-out",
-          fontFamily: typography.fontFamily.primary,
-        }}
-      >
-        {/* Header Handle */}
-        <div
-          style={{
-            padding: "12px",
-            display: "flex",
-            justifyContent: "center",
-            borderBottomWidth: "1px",
-            borderBottomColor: colors.hairline,
-          }}
-        >
-          <div
-            style={{
-              width: "40px",
-              height: "4px",
-              backgroundColor: colors.hairline,
-              borderRadius: borderRadius.full,
-            }}
-          />
-        </div>
-
-        {/* Title */}
-        <div
-          style={{
-            padding: "16px",
-            backgroundColor: colors.primary,
-            color: colors.onDark,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>
-              TAPE CRAFT
-            </h2>
-            <p
-              style={{
-                fontSize: "12px",
-                color: colors.onDarkMuted,
-                margin: "4px 0 0 0",
-                fontWeight: 500,
-              }}
-            >
-              Studio • Customizer
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px",
-              color: colors.onDark,
-              display: "flex",
-            }}
-          >
-            <ChevronUp size={24} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="overflow-y-auto flex-1">
-          <SidebarContent
-            stickerColor={stickerColor}
-            setStickerColor={setStickerColor}
-            cassetteColor={cassetteColor}
-            setCassetteColor={setCassetteColor}
-            cassetteTexture={cassetteTexture}
-            setCassetteTexture={setCassetteTexture}
-            textureInputRef={textureInputRef}
-            calculatePrice={calculatePrice}
-            handleTextureUpload={handleTextureUpload}
-            removeTexture={removeTexture}
-            extractStickerTexture={extractStickerTexture}
-            downloadBaseTexture={downloadBaseTexture}
-            isMobile={true}
-          />
-        </div>
-      </div>
-    </>
-  );
-};
-
 export default function App() {
-  const isMobile = useMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const [stickerColor, setStickerColor] = useState(colors.canvas);
   const [cassetteColor, setCassetteColor] = useState(colors.canvas);
+  const [shellFinish, setShellFinish] = useState<ShellFinish>("matte");
   const [cassetteTexture, setCassetteTexture] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    "shell" | "label" | "tape" | "packaging"
+  >("shell");
+  const [viewMode, setViewMode] = useState<ViewMode>("tilted");
+  const [flipCount, setFlipCount] = useState(0);
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  useEffect(() => {
+    (
+      window as Window & { __tapeCraftViewMode?: ViewMode }
+    ).__tapeCraftViewMode = viewMode;
+  }, [viewMode]);
+
+  const price = 12.9 + (cassetteTexture ? 3.0 : 0);
 
   const labelRotation = 90;
   const labelOffsetX = 0;
@@ -1689,126 +1842,303 @@ export default function App() {
   const scale = 1;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        position: "relative",
-        height: "100vh",
-        flexDirection: isMobile ? "column" : "row",
-      }}
-    >
+    <div className="studio-shell flex h-screen w-screen overflow-hidden bg-[#141419] text-[#E2E8F0] flex-col md:flex-row">
       <Leva hidden />
 
-      {/* Mobile Header */}
-      {isMobile && (
-        <div
-          style={{
-            backgroundColor: colors.primary,
-            color: colors.onDark,
-            padding: "12px 16px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            borderBottom: `1px solid ${colors.hairline}`,
-            zIndex: 20,
-          }}
-        >
-          <div>
-            <h1 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-              TAPE CRAFT
-            </h1>
-          </div>
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px",
-              color: colors.onDark,
-              display: "flex",
-              alignItems: "center",
-              fontSize: "24px",
-            }}
-          >
-            <Menu size={24} />
-          </button>
-        </div>
-      )}
-
-      {/* Canvas Container */}
-      <Canvas
-        shadows={false}
-        camera={{ position: [0, 0, 2.5], fov: 50 }}
+      {/* Mobile Header - Only visible on mobile */}
+      <header
+        className="md:hidden fixed top-0 w-full z-40 h-16 flex items-center justify-between px-4"
         style={{
-          flex: 1,
-          backgroundColor: colors.canvas,
-          width: isMobile ? "100%" : "calc(100vw - 320px)",
+          backgroundColor: colors.primary,
+          borderBottom: `1px solid ${colors.hairline}`,
         }}
       >
-        {/* 3D Environment */}
-        <Environment3D />
+        <h1 className="text-base font-bold" style={{ color: colors.onDark }}>
+          TAPE CRAFT
+        </h1>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-1"
+          style={{ color: colors.onDark }}
+        >
+          <Menu size={24} />
+        </button>
+      </header>
 
-        {/* Apple Studio Lighting */}
-        <DynamicLighting lighting={appleLighting} />
+      {/* Navigation Rail - Desktop only */}
+      <nav className="hidden md:flex h-full w-20 flex-shrink-0 flex-col items-center border-r border-[#334155] bg-[#1C1C24] py-6">
+        <div className="mb-8 flex h-10 w-10 items-center justify-center rounded-xl bg-[#252530] text-[#8B5CF6] shadow-[0_0_15px_rgba(139,92,246,0.15)]">
+          <Play className="h-5 w-5" />
+        </div>
+        <div className="flex w-full flex-col gap-3 px-2">
+          {[
+            { id: "shell", label: "Shell", icon: Play },
+            { id: "label", label: "Label", icon: Pen },
+            { id: "tape", label: "Tape", icon: Disc },
+            { id: "packaging", label: "Packaging", icon: Box },
+          ].map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id as typeof activeTab)}
+                className={
+                  active
+                    ? "relative flex flex-col items-center justify-center gap-1 rounded-xl border border-[#8B5CF6]/30 bg-[#252530] px-2 py-3 text-[#8B5CF6] shadow-[0_0_15px_rgba(139,92,246,0.15)]"
+                    : "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-[#94A3B8] transition-colors hover:bg-[#252530] hover:text-[#E2E8F0]"
+                }
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-md bg-[#8B5CF6]" />
+                )}
+                <Icon className="mb-1 h-6 w-6" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="mt-auto flex w-full items-center justify-center rounded-xl px-2 py-3 text-[#94A3B8] transition-colors hover:bg-[#252530] hover:text-[#E2E8F0]"
+        >
+          <LogOut className="h-6 w-6" />
+        </button>
+      </nav>
 
-        {/* Camera Lightbox */}
-        <CameraLightbox intensity={0.35} color={colors.canvas} distance={2.2} />
+      {/* Main Content Area */}
+      <main className="relative min-w-0 flex-1 overflow-hidden bg-[#141419] pb-28 md:pb-0 flex flex-col md:flex-row">
 
-        {/* Floating Particles */}
-        <FloatingParticles />
+        {/* Canvas Container */}
+        <div className="relative md:h-full md:flex-1 w-full overflow-hidden main-bg-gradient">
+          {/* Mobile Canvas */}
+          <div className="relative md:hidden w-full aspect-square">
+            <Canvas
+              shadows={false}
+              camera={{ position: [0, 0, 2.5], fov: 50 }}
+              onCreated={({ gl }) => {
+                gl.toneMappingExposure = 0.45;
+              }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "transparent",
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              <ResponsiveCamera isZoomed={isZoomed} />
+              <Environment files="/exr/studio.exr" background={false} />
+              <Environment3D />
+              <DynamicLighting lighting={appleLighting} />
+              <CameraLightbox
+                intensity={0.06}
+                color={colors.canvas}
+                distance={2.2}
+              />
+              <FloatingParticles />
+              <Suspense fallback={<Loader />}>
+                <CassetteRig
+                  stickerColor={stickerColor}
+                  scale={scale}
+                  texture={cassetteTexture}
+                  cassetteColor={cassetteColor}
+                  shellFinish={shellFinish}
+                  labelRotation={labelRotation}
+                  labelOffsetX={labelOffsetX}
+                  labelOffsetY={labelOffsetY}
+                  labelScaleX={labelScaleX}
+                  labelScaleY={labelScaleY}
+                  labelMirrorX={labelMirrorX}
+                  labelMirrorY={labelMirrorY}
+                  viewMode={viewMode}
+                  flipCount={flipCount}
+                />
+              </Suspense>
+            </Canvas>
+          </div>
 
-        <Suspense fallback={<Loader />}>
-          <Cassette
+          {/* Desktop Canvas */}
+          <Canvas
+            shadows={false}
+            camera={{ position: [0, 0, 2.5], fov: 50 }}
+            onCreated={({ gl }) => {
+              gl.toneMappingExposure = 0.45;
+            }}
+            className="hidden md:block"
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "transparent",
+              width: "100%",
+              height: "100%",
+              zIndex: 0,
+            }}
+          >
+            <ResponsiveCamera isZoomed={isZoomed} />
+            <Environment files="/exr/studio.exr" background={false} />
+            <Environment3D />
+            <DynamicLighting lighting={appleLighting} />
+            <CameraLightbox
+              intensity={0.06}
+              color={colors.canvas}
+              distance={2.2}
+            />
+            <CassetteHalo />
+            <FloatingParticles />
+            <Suspense fallback={<Loader />}>
+              <CassetteRig
+                stickerColor={stickerColor}
+                scale={scale}
+                texture={cassetteTexture}
+                cassetteColor={cassetteColor}
+                shellFinish={shellFinish}
+                labelRotation={labelRotation}
+                labelOffsetX={labelOffsetX}
+                labelOffsetY={labelOffsetY}
+                labelScaleX={labelScaleX}
+                labelScaleY={labelScaleY}
+                labelMirrorX={labelMirrorX}
+                labelMirrorY={labelMirrorY}
+                viewMode={viewMode}
+                flipCount={flipCount}
+              />
+            </Suspense>
+          </Canvas>
+
+          {/* Desktop Floating Controls */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-24 z-40 flex justify-center px-4 md:bottom-28">
+            <div className="pointer-events-auto flex w-full max-w-[780px] flex-wrap items-center justify-center overflow-hidden rounded-2xl border border-[#334155] bg-[#1C1C24]/95 px-2 py-1 shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-md md:w-auto md:flex-nowrap">
+              <button
+                type="button"
+                onClick={() => setFlipCount((c) => c + 1)}
+                className={`flex flex-1 items-center justify-center gap-2 border-r border-[#334155] px-3 py-2 text-xs transition-colors md:flex-none md:px-4 md:text-sm ${flipCount % 2 !== 0 ? "text-white bg-[#334155]/50" : "text-[#94A3B8] hover:text-white"}`}
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                Flip Side
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsZoomed((z) => !z)}
+                className={`flex flex-1 items-center justify-center gap-2 px-3 py-2 text-xs transition-colors md:flex-none md:px-4 md:text-sm ${isZoomed ? "text-white bg-[#334155]/50" : "text-[#94A3B8] hover:text-white"}`}
+              >
+                <ZoomIn className="h-4 w-4" />
+                Zoom
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setViewMode((current) =>
+                    current === "tilted" ? "flat" : "tilted",
+                  )
+                }
+                className="flex w-full items-center justify-center gap-2 border-t border-[#334155] px-3 py-2 text-xs text-[#94A3B8] transition-colors hover:text-white md:w-auto md:border-l md:border-t-0 md:px-4 md:text-sm"
+              >
+                <Settings className="h-4 w-4" />
+                {viewMode === "tilted" ? "Flat View" : "Side View"}
+              </button>
+            </div>
+          </div>
+
+          {/* Desktop Footer */}
+          <div className="hidden md:flex pointer-events-none absolute inset-x-0 bottom-0 z-30 items-center justify-between border-t border-[#334155] bg-[#141419]/95 px-6 py-5 backdrop-blur-md">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#94A3B8]">
+                Total
+              </p>
+              <div className="mt-1 text-3xl font-bold tracking-tight text-white">
+                {price.toFixed(2)}€
+              </div>
+            </div>
+            <div className="pointer-events-auto flex items-center gap-4">
+              <button className="rounded-xl border border-[#334155] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#252530]">
+                SAVE DESIGN
+              </button>
+              <button className="flex items-center gap-2 rounded-xl bg-[#8B5CF6] px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-[#8B5CF6]/20 transition-colors hover:bg-[#7C3AED]">
+                <ShoppingCart className="h-4 w-4" />
+                ADD TO CART
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Customization Panel */}
+        <div className="md:hidden w-full flex-1 overflow-y-auto bg-[#141419] space-y-6 px-4 py-4">
+          <Sidebar
+            activeTab={activeTab}
             stickerColor={stickerColor}
-            scale={scale}
-            texture={cassetteTexture}
+            setStickerColor={setStickerColor}
             cassetteColor={cassetteColor}
-            labelRotation={labelRotation}
-            labelOffsetX={labelOffsetX}
-            labelOffsetY={labelOffsetY}
-            labelScaleX={labelScaleX}
-            labelScaleY={labelScaleY}
-            labelMirrorX={labelMirrorX}
-            labelMirrorY={labelMirrorY}
+            setCassetteColor={setCassetteColor}
+            shellFinish={shellFinish}
+            setShellFinish={setShellFinish}
+            cassetteTexture={cassetteTexture}
+            setCassetteTexture={setCassetteTexture}
           />
-        </Suspense>
+        </div>
 
-        <OrbitControls
-          enableZoom={true}
-          enablePan={false}
-          minPolarAngle={Math.PI / 2}
-          maxPolarAngle={Math.PI / 2}
-          enableRotate={true}
-          rotateSpeed={0.5}
-          minAzimuthAngle={-Infinity}
-          maxAzimuthAngle={Infinity}
-        />
-      </Canvas>
+        {/* Desktop Right Panel */}
+        <div className="hidden md:block h-full w-80 flex-shrink-0 bg-[#1C1C24] border-l border-[#334155] overflow-y-auto">
+          <Sidebar
+            activeTab={activeTab}
+            stickerColor={stickerColor}
+            setStickerColor={setStickerColor}
+            cassetteColor={cassetteColor}
+            setCassetteColor={setCassetteColor}
+            shellFinish={shellFinish}
+            setShellFinish={setShellFinish}
+            cassetteTexture={cassetteTexture}
+            setCassetteTexture={setCassetteTexture}
+          />
+        </div>
+      </main>
 
-      {/* Desktop Sidebar */}
-      {!isMobile && (
-        <Sidebar
-          stickerColor={stickerColor}
-          setStickerColor={setStickerColor}
-          cassetteColor={cassetteColor}
-          setCassetteColor={setCassetteColor}
-          cassetteTexture={cassetteTexture}
-          setCassetteTexture={setCassetteTexture}
-        />
-      )}
+      {/* Mobile Footer */}
+      <footer className="md:hidden fixed bottom-20 w-full z-30 h-16 bg-[#1C1C24] backdrop-blur-md flex justify-between items-center px-4 border-t border-[#334155]">
+        <div className="flex flex-col">
+          <span className="text-[11px] font-semibold uppercase text-[#94A3B8]">
+            Total
+          </span>
+          <span className="text-2xl font-bold text-[#8B5CF6]">
+            {price.toFixed(2)}€
+          </span>
+        </div>
+        <button className="bg-[#8B5CF6] text-white font-semibold rounded-lg px-6 py-3 hover:bg-[#7C3AED] transition-colors active:scale-95">
+          Add to Cart
+        </button>
+      </footer>
 
-      {/* Mobile Sidebar (Bottom Sheet) */}
-      {isMobile && (
-        <MobileSidebar
-          stickerColor={stickerColor}
-          setStickerColor={setStickerColor}
-          cassetteColor={cassetteColor}
-          setCassetteColor={setCassetteColor}
-          cassetteTexture={cassetteTexture}
-          setCassetteTexture={setCassetteTexture}
-          isOpen={mobileMenuOpen}
-          onClose={() => setMobileMenuOpen(false)}
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 w-full z-50 h-20 bg-[#1C1C24] border-t border-[#334155] flex justify-around items-center px-4 pb-2">
+        {[
+          { id: "shell", label: "Shell", icon: Play },
+          { id: "label", label: "Label", icon: Pen },
+          { id: "tape", label: "Tape", icon: Disc },
+          { id: "packaging", label: "Packaging", icon: Box },
+        ].map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as typeof activeTab)}
+              className={`flex flex-col items-center justify-center rounded-xl px-4 py-2 transition-all ${
+                active
+                  ? "bg-[#8B5CF6] text-white"
+                  : "text-[#94A3B8] hover:bg-[#252530]"
+              }`}
+            >
+              <Icon className="h-6 w-6 mb-1" />
+              <span className="text-[10px] font-medium">{label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50 transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
         />
       )}
     </div>

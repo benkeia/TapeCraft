@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    background-color: #131313;
+  }
+
   :root {
     /* Notion Design System - Colors */
     --color-primary: #7c3aed;
@@ -77,8 +84,8 @@
   }
 
   body {
-    background-color: var(--color-canvas);
-    color: var(--color-ink);
+    background-color: #131313;
+    color: #e5e2e1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

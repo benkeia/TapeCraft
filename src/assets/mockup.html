@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Premium Cassette Customizer Studio</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Include FontAwesome for icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-fonts">
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              darkest: '#141419',
+              dark: '#1C1C24',
+              panel: '#252530',
+              primary: '#8B5CF6',
+              primaryHover: '#7C3AED',
+              text: '#E2E8F0',
+              textMuted: '#94A3B8',
+              border: '#334155'
+            }
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-styles" innerhtml="/* Custom scrollbar for the right panel */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Gradient background for main area */
+.main-bg-gradient {
+  background: radial-gradient(circle at center, #2e2844 0%, #1a1b26 100%);
+}
+
+/* Color swatch border for active state */
+.color-swatch.active {
+  box-shadow: 0 0 0 2px #1C1C24, 0 0 0 3px #FEF3C7;
+}">
+    /* Custom scrollbar for the right panel */
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    
+    /* Gradient background for main area */
+    .main-bg-gradient {
+      background: radial-gradient(circle at center, #2e2844 0%, #1a1b26 100%);
+    }
+
+    /* Color swatch border for active state */
+    .color-swatch.active {
+      box-shadow: 0 0 0 2px #1C1C24, 0 0 0 4px #E2E8F0;
+    }
+  </style>
+</head>
+<body class="bg-app-darkest text-app-text h-screen w-screen overflow-hidden flex flex-col font-sans">
+<!-- BEGIN: Main App Container -->
+<div class="flex flex-1 overflow-hidden h-full">
+<!-- BEGIN: Sidebar Navigation -->
+<nav class="w-20 bg-app-dark border-r border-app-border flex flex-col items-center py-6 flex-shrink-0 relative z-20">
+<!-- Logo -->
+<div class="mb-8 w-10 h-10 rounded-xl bg-app-panel flex items-center justify-center text-app-primary">
+<i class="fa-solid fa-play"></i>
+</div>
+<!-- Navigation Links -->
+<div class="flex flex-col gap-6 w-full px-2">
+<!-- Active Link -->
+<a class="flex flex-col items-center justify-center gap-1 py-3 rounded-lg bg-app-panel bg-opacity-80 text-app-primary relative group border border-app-primary/30 shadow-[0_0_15px_rgba(139,92,246,0.15)]" href="#">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-app-primary rounded-r-md"></div>
+<i class="fa-solid fa-cassette-tape text-xl mb-1"></i> <!-- Fallback icon -->
+<svg class="w-6 h-6 mb-1" fill="currentColor" viewbox="0 0 24 24"><path d="M4 6h16v12H4z" opacity=".2"></path><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v4H6zm10 0h2v4h-2zM9.5 12c0 .83-.67 1.5-1.5 1.5S6.5 12.83 6.5 12s.67-1.5 1.5-1.5 1.5.67 1.5 1.5zm6.5 0c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5.67-1.5 1.5-1.5 1.5.67 1.5 1.5z"></path></svg>
+<span class="text-[10px] font-medium">Shell</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 py-3 rounded-lg text-app-textMuted hover:text-app-text hover:bg-app-panel transition-colors group" href="#">
+<i class="fa-solid fa-pen text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Label</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 py-3 rounded-lg text-app-textMuted hover:text-app-text hover:bg-app-panel transition-colors group" href="#">
+<i class="fa-solid fa-tape text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Tape</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 py-3 rounded-lg text-app-textMuted hover:text-app-text hover:bg-app-panel transition-colors group" href="#">
+<i class="fa-solid fa-box text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Packaging</span>
+</a>
+</div>
+<!-- Logout / Exit -->
+<div class="mt-auto mb-4 w-full px-2">
+<a class="flex items-center justify-center w-full py-3 rounded-lg text-app-textMuted hover:text-app-text hover:bg-app-panel transition-colors" href="#">
+<i class="fa-solid fa-arrow-right-from-bracket text-xl"></i>
+</a>
+</div>
+</nav>
+<!-- END: Sidebar Navigation -->
+<!-- BEGIN: Main Preview Area -->
+<main class="flex-1 flex flex-col relative z-10 min-w-0 main-bg-gradient pb-[80px]">
+<!-- Header inside main area -->
+<header class="flex items-center justify-between p-6 w-full">
+<h1 class="text-2xl font-semibold text-white tracking-wide">Premium Cassette Customizer Studio</h1>
+<button class="w-10 h-10 rounded-xl bg-app-panel border border-app-border flex items-center justify-center text-app-textMuted hover:text-white transition-colors">
+<i class="fa-solid fa-gear"></i>
+</button>
+</header>
+<!-- Cassette Display Area -->
+<div class="flex-1 flex flex-col items-center justify-center relative px-8 pb-12">
+<!-- Placeholder for the 3D/High-res Cassette image -->
+<div class="relative w-full max-w-3xl aspect-[16/9] flex items-center justify-center drop-shadow-2xl">
+<img alt="Cassette Preview" class="max-w-full max-h-full object-contain filter drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-lg" src="https://lh3.googleusercontent.com/aida/ADBb0uhhsD-FTKAPNcB3LvpmwdK8rZqbyO1Es2LOD00XEuW19VN6TkJzQ7WRlWzS72K_nHRKzJgYnWARMKcPBJrDUABquU5QXWxR1sOKjcqEqnN0tctf8nJLpW7JsTdINb0bFHnfAk1x4hMh30OTcqgWeOseGoSoIw329qNCc9Dw_ZvlhUfv8Y7tExPpDkkK6ngxh1__KZoLCIokgJcrYnl-yMSDw_jCzO4nj4u9uANeFeGW0iQ8KpWP-GtAVQ"/>
+<!-- Mock labels to resemble the image -->
+
+</div>
+<!-- Floating Controls -->
+<div class="absolute bottom-8 flex items-center bg-app-dark border border-app-border rounded-xl px-2 py-1 shadow-lg">
+<button class="flex items-center gap-2 px-4 py-2 text-sm text-app-textMuted hover:text-white transition-colors border-r border-app-border">
+<i class="fa-solid fa-rotate"></i> Rotate
+          </button>
+<button class="flex items-center gap-2 px-4 py-2 text-sm text-app-textMuted hover:text-white transition-colors border-r border-app-border">
+<i class="fa-solid fa-left-right"></i> Flip Side
+          </button>
+<button class="flex items-center gap-2 px-4 py-2 text-sm text-app-textMuted hover:text-white transition-colors">
+<i class="fa-solid fa-magnifying-glass-plus"></i> Zoom
+          </button>
+</div>
+</div>
+</main>
+<!-- END: Main Preview Area -->
+<!-- BEGIN: Right Customization Panel -->
+<aside class="w-[360px] bg-app-dark border-l border-app-border flex flex-col flex-shrink-0 z-20 pb-[80px]">
+<div class="flex-1 overflow-y-auto scrollbar-hide p-6 flex flex-col gap-8 gap-10">
+<!-- Section: Customize Shell -->
+<section>
+<h2 class="text-xs font-bold text-app-textMuted tracking-wider mb-4 uppercase">Customize Shell</h2>
+<div class="grid grid-cols-6 gap-y-4 gap-x-2">
+<!-- Row 1 -->
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-black color-swatch border border-gray-700"></button>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-white color-swatch"></button>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#EC4899] color-swatch"></button>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#F97316] color-swatch"></button>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#22C55E] color-swatch"></button>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#0EA5E9] color-swatch"></button>
+</div>
+<!-- Row 2 -->
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#8B5CF6] color-swatch"></button>
+<span class="text-[10px] text-app-textMuted">Purple</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#475569] color-swatch"></button>
+<span class="text-[10px] text-app-textMuted">Grey</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#FEF3C7] color-swatch active"></button>
+<span class="text-[10px] text-white">Cream</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-[#92400E] color-swatch"></button>
+<span class="text-[10px] text-app-textMuted">Brown</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-transparent border border-app-border relative overflow-hidden flex items-center justify-center color-swatch">
+<div class="absolute w-full h-[1px] bg-app-border transform -rotate-45"></div>
+</button>
+<span class="text-[10px] text-app-textMuted">Clear</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<button class="w-8 h-8 rounded-full bg-app-panel border border-app-border flex items-center justify-center text-app-textMuted hover:text-white color-swatch">
+<span class="text-xs font-semibold">T</span>
+</button>
+<span class="text-[10px] text-app-textMuted">Custom</span>
+</div>
+</div>
+</section>
+<hr class="border-app-border"/>
+<!-- Section: Texture -->
+<section>
+<h2 class="text-xs font-bold text-app-textMuted tracking-wider mb-4 uppercase">Texture</h2>
+<div class="flex bg-app-panel rounded-lg p-1 border border-app-border">
+<button class="flex-1 py-2 text-sm font-medium rounded-md bg-app-border text-white shadow-sm">Matte</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-app-textMuted hover:text-white transition-colors">Transparent</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-app-textMuted hover:text-white transition-colors">Frosted</button>
+</div>
+</section>
+<hr class="border-app-border"/>
+<!-- Section: Label Design -->
+<section>
+<h2 class="text-xs font-bold text-app-textMuted tracking-wider mb-4 uppercase">Label Design</h2>
+<!-- Upload Box -->
+<div class="border border-dashed border-app-textMuted rounded-xl p-8 flex flex-col items-center justify-center gap-3 hover:border-white transition-colors cursor-pointer mb-4 bg-app-panel/30">
+<i class="fa-solid fa-arrow-up-from-bracket text-xl text-app-textMuted"></i>
+<span class="text-sm text-app-textMuted">Upload Artwork</span>
+</div>
+<!-- Custom Text Input -->
+<div class="mb-4">
+<input class="w-full bg-app-panel border border-app-border rounded-lg px-4 py-3 text-sm text-white placeholder-app-textMuted focus:outline-none focus:border-app-primary focus:ring-1 focus:ring-app-primary" placeholder="Custom Text" type="text"/>
+</div>
+<!-- Font Controls -->
+<div class="flex gap-2">
+<div class="relative flex-1">
+<select class="w-full appearance-none bg-app-panel border border-app-border rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-app-primary focus:ring-1 focus:ring-app-primary pr-10">
+<option>Font</option>
+<option>Inter</option>
+<option>Roboto</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-app-textMuted">
+<i class="fa-solid fa-chevron-down text-xs"></i>
+</div>
+</div>
+<button class="w-12 h-[46px] flex items-center justify-center bg-app-panel border border-app-border rounded-lg text-white font-bold hover:bg-app-border transition-colors">B</button>
+<button class="w-12 h-[46px] flex items-center justify-center bg-app-panel border border-app-border rounded-lg text-white italic font-serif hover:bg-app-border transition-colors">I</button>
+<button class="w-12 h-[46px] flex items-center justify-center bg-app-panel border border-app-border rounded-lg text-white hover:bg-app-border transition-colors">
+<i class="fa-solid fa-align-left"></i>
+</button>
+</div>
+</section>
+</div>
+</aside>
+<!-- END: Right Customization Panel -->
+</div>
+<!-- END: Main App Container -->
+<!-- BEGIN: Bottom Bar -->
+<div class="absolute bottom-0 left-20 right-0 h-[80px] bg-app-darkest border-t border-app-border flex items-center justify-between px-6 z-30">
+<div class="text-3xl font-bold text-white tracking-tight">
+      TOTAL: 12.90€
+    </div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-3 rounded-lg border border-app-border text-sm font-semibold text-white hover:bg-app-panel transition-colors">
+        SAVE DESIGN
+      </button>
+<button class="px-8 py-3 rounded-lg bg-app-primary text-white text-sm font-semibold flex items-center gap-2 hover:bg-app-primaryHover transition-colors shadow-lg shadow-app-primary/20">
+<i class="fa-solid fa-cart-shopping"></i>
+        ADD TO CART
+      </button>
+</div>
+</div>
+<!-- END: Bottom Bar -->
+</body></html>
