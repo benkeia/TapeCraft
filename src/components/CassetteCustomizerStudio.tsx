@@ -12,7 +12,7 @@ interface CassettCustomizerStudioProps {
 }
 
 export function CassetteCustomizerStudio({
-  initialPrice = 12.90,
+  initialPrice = 12.9,
 }: CassettCustomizerStudioProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("shell");
   const [price, setPrice] = useState(initialPrice);
@@ -52,7 +52,9 @@ export function CassetteCustomizerStudio({
         onTextureChange={(texture) => console.log("Texture:", texture)}
         onRotationChange={(rotation) => console.log("Rotation:", rotation)}
         onZoomChange={(zoom) => console.log("Zoom:", zoom)}
-        onBrightnessChange={(brightness) => console.log("Brightness:", brightness)}
+        onBrightnessChange={(brightness) =>
+          console.log("Brightness:", brightness)
+        }
       />
 
       {/* Bottom Bar */}

@@ -594,7 +594,12 @@ const SceneDragSurface = ({
       onPointerCancel={onDragEnd}
     >
       <planeGeometry args={[40, 40]} />
-      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+      <meshBasicMaterial
+        transparent
+        opacity={0}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
     </mesh>
   );
 };
@@ -657,7 +662,9 @@ function Cassette({
   } | null>(null);
   const [isTransparent, setIsTransparent] = useState(false);
   const originalImageRef = useRef<HTMLImageElement | null>(null);
-  const originalShellMaterialRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const originalShellMaterialRef = useRef<THREE.MeshStandardMaterial | null>(
+    null,
+  );
 
   // Contrôles Leva pour le matériau de transmission
   const materialProps = useControls("Transmission Material", {
@@ -932,7 +939,8 @@ function Cassette({
                 side: THREE.DoubleSide,
               });
             } else if (shellFinish === "chrome") {
-              const sourceMaterial = originalShellMaterialRef.current ?? material;
+              const sourceMaterial =
+                originalShellMaterialRef.current ?? material;
 
               // Dark mirrored plastic look: reflective and cheap-looking, not pure metal.
               const chromeMaterial = new THREE.MeshPhysicalMaterial({
@@ -950,7 +958,8 @@ function Cassette({
               });
 
               if (!originalImageRef.current && sourceMaterial.map?.image) {
-                originalImageRef.current = sourceMaterial.map.image as HTMLImageElement;
+                originalImageRef.current = sourceMaterial.map
+                  .image as HTMLImageElement;
               }
 
               const sourceImage = originalImageRef.current;
@@ -963,7 +972,12 @@ function Cassette({
                 if (ctx) {
                   ctx.drawImage(sourceImage, 0, 0);
 
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const imageData = ctx.getImageData(
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height,
+                  );
                   const data = imageData.data;
 
                   const tempColor = new THREE.Color(colorValue);
@@ -1003,7 +1017,8 @@ function Cassette({
 
               mesh.material = chromeMaterial;
             } else {
-              const sourceMaterial = originalShellMaterialRef.current ?? material;
+              const sourceMaterial =
+                originalShellMaterialRef.current ?? material;
 
               // Garder le matériau original avec sa texture
               mesh.material = sourceMaterial.clone();
@@ -1019,12 +1034,12 @@ function Cassette({
               // Rebuild the matte mask from the original source image so it
               // remains available even after switching from chrome mode.
               if (!originalImageRef.current && material.map?.image) {
-                originalImageRef.current = material.map.image as HTMLImageElement;
+                originalImageRef.current = material.map
+                  .image as HTMLImageElement;
               }
 
               const sourceImage = originalImageRef.current;
               if (sourceImage) {
-
                 const canvas = document.createElement("canvas");
                 canvas.width = sourceImage.width;
                 canvas.height = sourceImage.height;
@@ -1088,7 +1103,9 @@ function Cassette({
           else if (mesh.name === "Sticker") {
             const newMaterial = new THREE.MeshStandardMaterial({
               map: textureMap ?? null,
-              color: textureMap ? new THREE.Color("#b0b0b0") : new THREE.Color(stickerColor),
+              color: textureMap
+                ? new THREE.Color("#b0b0b0")
+                : new THREE.Color(stickerColor),
               roughness: 1,
               metalness: 0,
               envMapIntensity: 0,
@@ -1469,7 +1486,9 @@ const SidebarContent = ({
                   }}
                 >
                   <div className="text-center">
-                    <div style={{ fontSize: "18px", marginBottom: "4px" }}>↑</div>
+                    <div style={{ fontSize: "18px", marginBottom: "4px" }}>
+                      ↑
+                    </div>
                     <p>Upload Label</p>
                   </div>
                 </Button>
@@ -1908,7 +1927,6 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="relative min-w-0 flex-1 overflow-hidden bg-[#141419] pb-28 md:pb-0 flex flex-col md:flex-row">
-
         {/* Canvas Container */}
         <div className="relative md:h-full md:flex-1 w-full overflow-hidden main-bg-gradient">
           {/* Mobile Canvas */}
